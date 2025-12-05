@@ -102,10 +102,6 @@ services:
     networks:
       - massweb-network
 
-networks:
-  massweb-network:
-    driver: bridge
-
 volumes:
   mysql_data:
   redis_data:

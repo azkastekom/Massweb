@@ -36,7 +36,7 @@ import { OrganizationMember } from '../entities/organization-member.entity';
                     Organization,
                     OrganizationMember,
                 ],
-                synchronize: configService.get('NODE_ENV') !== 'production',
+                synchronize: true, // Auto-create tables (change to false after first deploy)
                 logging: configService.get('NODE_ENV') === 'development',
             }),
             inject: [ConfigService],
