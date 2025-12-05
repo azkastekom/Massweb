@@ -1,0 +1,75 @@
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
+import { CsvColumn } from './csv-column.entity';
+import { CsvRow } from './csv-row.entity';
+import { GeneratedContent } from './generated-content.entity';
+import { PublishJob } from './publish-job.entity';
+import { Organization } from './organization.entity';
+import { User } from './user.entity';
+
+@Entity('projects')
+export class Project {
+    @PrimaryGeneratedColumn('uuid')
+    id: string;
+
+    @Column({ nullable: true })
+    organizationId: string;
+
+    @Column({ nullable: true })
+    createdById: string;
+
+    @Column()
+    name: string;
+
+    @Column({ type: 'text', nullable: true })
+    description: string;
+
+    @Column({ type: 'longtext' })
+    template: string;
+
+    @Column({ type: 'text', nullable: true })
+    metaDescriptionTemplate: string;
+
+    @Column({ type: 'text', nullable: true })
+    tagsTemplate: string;
+
+    @Column({ type: 'text', nullable: true })
+    titleTemplate: string;
+
+    @Column({ type: 'text', nullable: true })
+    slugTemplate: string;
+
+    @Column({ default: 5 })
+    publishDelaySeconds: number;
+
+    @Column({ nullable: true })
+    thumbnailUrl: string;
+
+    @Column('simple-array', { nullable: true })
+    categories: string[];
+
+    @CreateDateColumn()
+    createdAt: Date;
+
+    @UpdateDateColumn()
+    updatedAt: Date;
+
+    @OneToMany(() => CsvColumn, (column) => column.project, { cascade: true })
+    csvColumns: CsvColumn[];
+
+    @OneToMany(() => CsvRow, (row) => row.project, { cascade: true })
+    csvRows: CsvRow[];
+
+    @OneToMany(() => GeneratedContent, (content) => content.project, { cascade: true })
+    generatedContents: GeneratedContent[];
+
+    @OneToMany(() => PublishJob, (job) => job.project, { cascade: true })
+    publishJobs: PublishJob[];
+
+    @ManyToOne(() => Organization, org => org.projects, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'organizationId' })
+    organization: Organization;
+
+    @ManyToOne(() => User, { nullable: true })
+    @JoinColumn({ name: 'createdById' })
+    createdBy: User;
+}
