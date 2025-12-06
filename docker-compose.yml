@@ -91,8 +91,6 @@ services:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:3001/api}
     container_name: massweb-frontend
     restart: unless-stopped
-    depends_on:
-
 
 volumes:
   mysql_data:
