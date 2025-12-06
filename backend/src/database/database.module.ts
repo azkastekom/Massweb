@@ -9,6 +9,7 @@ import { PublishJob } from '../entities/publish-job.entity';
 import { User } from '../entities/user.entity';
 import { Organization } from '../entities/organization.entity';
 import { OrganizationMember } from '../entities/organization-member.entity';
+import { ApiKey } from '../entities/api-key.entity';
 
 @Global()
 @Module({
@@ -35,6 +36,7 @@ import { OrganizationMember } from '../entities/organization-member.entity';
                     User,
                     Organization,
                     OrganizationMember,
+                    ApiKey,
                 ],
                 synchronize: true, // Auto-create tables (change to false after first deploy)
                 logging: configService.get('NODE_ENV') === 'development',

@@ -21,8 +21,10 @@ import { Route as ContentsContentIdRouteImport } from './routes/contents/$conten
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminOrganizationsRouteImport } from './routes/admin/organizations'
 import { Route as AdminJobsRouteImport } from './routes/admin/jobs'
+import { Route as ProjectsProjectIdApiDocsRouteImport } from './routes/projects/$projectId_.api-docs'
 import { Route as OrganizationsOrganizationIdSettingsRouteImport } from './routes/organizations/$organizationId.settings'
 import { Route as OrganizationsOrganizationIdMembersRouteImport } from './routes/organizations/$organizationId.members'
+import { Route as OrganizationsOrganizationIdApiKeysRouteImport } from './routes/organizations/$organizationId.api-keys'
 
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
@@ -84,6 +86,12 @@ const AdminJobsRoute = AdminJobsRouteImport.update({
   path: '/jobs',
   getParentRoute: () => AdminRoute,
 } as any)
+const ProjectsProjectIdApiDocsRoute =
+  ProjectsProjectIdApiDocsRouteImport.update({
+    id: '/projects/$projectId_/api-docs',
+    path: '/projects/$projectId/api-docs',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const OrganizationsOrganizationIdSettingsRoute =
   OrganizationsOrganizationIdSettingsRouteImport.update({
     id: '/organizations/$organizationId/settings',
@@ -94,6 +102,12 @@ const OrganizationsOrganizationIdMembersRoute =
   OrganizationsOrganizationIdMembersRouteImport.update({
     id: '/organizations/$organizationId/members',
     path: '/organizations/$organizationId/members',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const OrganizationsOrganizationIdApiKeysRoute =
+  OrganizationsOrganizationIdApiKeysRouteImport.update({
+    id: '/organizations/$organizationId/api-keys',
+    path: '/organizations/$organizationId/api-keys',
     getParentRoute: () => rootRouteImport,
   } as any)
 
@@ -110,8 +124,10 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/projects/create': typeof ProjectsCreateRoute
   '/projects': typeof ProjectsIndexRoute
+  '/organizations/$organizationId/api-keys': typeof OrganizationsOrganizationIdApiKeysRoute
   '/organizations/$organizationId/members': typeof OrganizationsOrganizationIdMembersRoute
   '/organizations/$organizationId/settings': typeof OrganizationsOrganizationIdSettingsRoute
+  '/projects/$projectId/api-docs': typeof ProjectsProjectIdApiDocsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -126,8 +142,10 @@ export interface FileRoutesByTo {
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/projects/create': typeof ProjectsCreateRoute
   '/projects': typeof ProjectsIndexRoute
+  '/organizations/$organizationId/api-keys': typeof OrganizationsOrganizationIdApiKeysRoute
   '/organizations/$organizationId/members': typeof OrganizationsOrganizationIdMembersRoute
   '/organizations/$organizationId/settings': typeof OrganizationsOrganizationIdSettingsRoute
+  '/projects/$projectId/api-docs': typeof ProjectsProjectIdApiDocsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -143,8 +161,10 @@ export interface FileRoutesById {
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/projects/create': typeof ProjectsCreateRoute
   '/projects/': typeof ProjectsIndexRoute
+  '/organizations/$organizationId/api-keys': typeof OrganizationsOrganizationIdApiKeysRoute
   '/organizations/$organizationId/members': typeof OrganizationsOrganizationIdMembersRoute
   '/organizations/$organizationId/settings': typeof OrganizationsOrganizationIdSettingsRoute
+  '/projects/$projectId_/api-docs': typeof ProjectsProjectIdApiDocsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -161,8 +181,10 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/projects/create'
     | '/projects'
+    | '/organizations/$organizationId/api-keys'
     | '/organizations/$organizationId/members'
     | '/organizations/$organizationId/settings'
+    | '/projects/$projectId/api-docs'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -177,8 +199,10 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/projects/create'
     | '/projects'
+    | '/organizations/$organizationId/api-keys'
     | '/organizations/$organizationId/members'
     | '/organizations/$organizationId/settings'
+    | '/projects/$projectId/api-docs'
   id:
     | '__root__'
     | '/'
@@ -193,8 +217,10 @@ export interface FileRouteTypes {
     | '/projects/$projectId'
     | '/projects/create'
     | '/projects/'
+    | '/organizations/$organizationId/api-keys'
     | '/organizations/$organizationId/members'
     | '/organizations/$organizationId/settings'
+    | '/projects/$projectId_/api-docs'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -207,8 +233,10 @@ export interface RootRouteChildren {
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
   ProjectsCreateRoute: typeof ProjectsCreateRoute
   ProjectsIndexRoute: typeof ProjectsIndexRoute
+  OrganizationsOrganizationIdApiKeysRoute: typeof OrganizationsOrganizationIdApiKeysRoute
   OrganizationsOrganizationIdMembersRoute: typeof OrganizationsOrganizationIdMembersRoute
   OrganizationsOrganizationIdSettingsRoute: typeof OrganizationsOrganizationIdSettingsRoute
+  ProjectsProjectIdApiDocsRoute: typeof ProjectsProjectIdApiDocsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -297,6 +325,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminJobsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/projects/$projectId_/api-docs': {
+      id: '/projects/$projectId_/api-docs'
+      path: '/projects/$projectId/api-docs'
+      fullPath: '/projects/$projectId/api-docs'
+      preLoaderRoute: typeof ProjectsProjectIdApiDocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/organizations/$organizationId/settings': {
       id: '/organizations/$organizationId/settings'
       path: '/organizations/$organizationId/settings'
@@ -309,6 +344,13 @@ declare module '@tanstack/react-router' {
       path: '/organizations/$organizationId/members'
       fullPath: '/organizations/$organizationId/members'
       preLoaderRoute: typeof OrganizationsOrganizationIdMembersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/organizations/$organizationId/api-keys': {
+      id: '/organizations/$organizationId/api-keys'
+      path: '/organizations/$organizationId/api-keys'
+      fullPath: '/organizations/$organizationId/api-keys'
+      preLoaderRoute: typeof OrganizationsOrganizationIdApiKeysRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -338,10 +380,13 @@ const rootRouteChildren: RootRouteChildren = {
   ProjectsProjectIdRoute: ProjectsProjectIdRoute,
   ProjectsCreateRoute: ProjectsCreateRoute,
   ProjectsIndexRoute: ProjectsIndexRoute,
+  OrganizationsOrganizationIdApiKeysRoute:
+    OrganizationsOrganizationIdApiKeysRoute,
   OrganizationsOrganizationIdMembersRoute:
     OrganizationsOrganizationIdMembersRoute,
   OrganizationsOrganizationIdSettingsRoute:
     OrganizationsOrganizationIdSettingsRoute,
+  ProjectsProjectIdApiDocsRoute: ProjectsProjectIdApiDocsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

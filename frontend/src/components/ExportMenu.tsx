@@ -21,7 +21,7 @@ export function ExportMenu({ projectId, projectName, totalContents }: ExportMenu
         setExporting(format)
         try {
             const response = await fetch(
-                `http://localhost:3001/api/content-generator/projects/${projectId}/export?format=${format}`
+                `/api/content-generator/projects/${projectId}/export?format=${format}`
             )
 
             if (!response.ok) {

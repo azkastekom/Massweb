@@ -496,4 +496,40 @@ export class ContentGeneratorService {
         }
         return slugified;
     }
+
+    /**
+     * Find contents by project for public API (with pagination)
+     */
+    async findContentsByProject(
+        projectId: string,
+        status?: string,
+        skip: number = 0,
+        take: number = 50,
+    ): Promise<[GeneratedContent[], number]> {
+        const where: any = { projectId };
+
+        if (status) {
+            where.publishStatus = status as PublishStatus;
+        }
+
+        return await this.contentRepository.findAndCount({
+            where,
+            order: { createdAt: 'DESC' },
+            skip,
+            take,
+        });
+    }
+
+    /**
+     * Find one content for public API
+     */
+    async findOnePublic(id: string): Promise<GeneratedContent> {
+        const content = await this.contentRepository.findOne({ where: { id } });
+
+        if (!content) {
+            throw new Error('Content not found');
+        }
+
+        return content;
+    }
 }

@@ -16,7 +16,7 @@ interface JobStatus {
     data: any
 }
 
-export function JobProgressTracker({ jobId, onComplete, type = 'generation' }: JobProgressProps) {
+export function JobProgressTracker({ jobId, onComplete }: JobProgressProps) {
     const [status, setStatus] = useState<JobStatus | null>(null)
     const [error, setError] = useState<string | null>(null)
 
@@ -25,7 +25,7 @@ export function JobProgressTracker({ jobId, onComplete, type = 'generation' }: J
 
         const pollInterval = setInterval(async () => {
             try {
-                const response = await fetch(`http://localhost:3001/api/content-generator/jobs/${jobId}/status`)
+                const response = await fetch(`/api/content-generator/jobs/${jobId}/status`)
                 if (!response.ok) throw new Error('Failed to fetch job status')
 
                 const data = await response.json()

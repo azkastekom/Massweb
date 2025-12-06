@@ -2,7 +2,7 @@ import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { projectsApi, contentApi, type GeneratedContent } from '../../lib/api'
 import { Button, Card, Spinner } from '@heroui/react'
-import { ArrowLeft, Sparkles, Eye, Trash2, CheckSquare, Square, RotateCcw } from 'lucide-react'
+import { ArrowLeft, Sparkles, Eye, Trash2, CheckSquare, Square, RotateCcw, Book } from 'lucide-react'
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ExportMenu } from '../../components/ExportMenu'
@@ -153,11 +153,17 @@ function ProjectDetailPage() {
 
     return (
         <div className="container mx-auto px-4 py-8 max-w-7xl">
-            <div className="mb-6">
+            <div className="mb-6 flex justify-between items-center">
                 <Link to="/projects">
                     <Button className="bg-gray-100 hover:bg-gray-200 text-gray-800">
                         <ArrowLeft className="w-4 h-4 mr-2" />
                         Back to Projects
+                    </Button>
+                </Link>
+                <Link to={`/projects/${projectId}/api-docs`}>
+                    <Button className="bg-purple-600 hover:bg-purple-700 text-white">
+                        <Book className="w-4 h-4 mr-2" />
+                        API Documentation
                     </Button>
                 </Link>
             </div>

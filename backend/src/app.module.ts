@@ -11,6 +11,8 @@ import { ContentGeneratorModule } from './content-generator/content-generator.mo
 import { AuthModule } from './auth/auth.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { AdminModule } from './admin/admin.module';
+import { ApiKeysModule } from './api-keys/api-keys.module';
+import { PublicModule } from './public/public.module';
 
 @Module({
   imports: [
@@ -24,6 +26,8 @@ import { AdminModule } from './admin/admin.module';
     AuthModule,
     OrganizationsModule,
     AdminModule,
+    ApiKeysModule,
+    PublicModule,
   ],
   controllers: [AppController],
   providers: [AppService],
