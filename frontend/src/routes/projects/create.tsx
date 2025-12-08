@@ -86,7 +86,7 @@ function CreateProjectPage() {
                     await Promise.race([
                         csvApi.upload(project.id, csvFile),
                         new Promise((_, reject) =>
-                            setTimeout(() => reject(new Error('CSV upload timed out')), 30000)
+                            setTimeout(() => reject(new Error('CSV upload timed out after 2 minutes')), 120000)
                         )
                     ])
                     console.log('CSV uploaded')
@@ -94,13 +94,13 @@ function CreateProjectPage() {
 
                 console.log('Starting generation...')
                 // Use synchronous generation (no Redis required)
-                const contents = await Promise.race([
+                const result = await Promise.race([
                     contentApi.generateSync(project.id),
                     new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('Generation timed out after 60 seconds')), 60000)
+                        setTimeout(() => reject(new Error('Generation timed out after 5 minutes')), 300000)
                     )
-                ]) as any
-                console.log('Generation completed:', contents.data?.length || 0, 'items')
+                ]) as { data: { generatedCount: number } }
+                console.log('Generation completed:', result.data?.generatedCount || 0, 'items')
 
                 // Navigate to project page after short delay
                 setTimeout(() => {

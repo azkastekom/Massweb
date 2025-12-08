@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Project } from '../entities/project.entity';
 import { OrganizationMember } from '../entities/organization-member.entity';
+import { GeneratedContent } from '../entities/generated-content.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 
@@ -13,6 +14,8 @@ export class ProjectsService {
         private projectRepository: Repository<Project>,
         @InjectRepository(OrganizationMember)
         private orgMemberRepository: Repository<OrganizationMember>,
+        @InjectRepository(GeneratedContent)
+        private generatedContentRepository: Repository<GeneratedContent>,
     ) { }
 
     async create(createProjectDto: CreateProjectDto, userId: string): Promise<Project> {
@@ -38,11 +41,14 @@ export class ProjectsService {
             return [];
         }
 
+        // Don't eagerly load csvColumns and csvRows - this causes performance issues
+        // with large datasets. Frontend should fetch CSV data separately when needed.
         const query = this.projectRepository
             .createQueryBuilder('project')
             .where('project.organizationId IN (:...organizationIds)', { organizationIds })
-            .leftJoinAndSelect('project.csvColumns', 'csvColumns')
-            .leftJoinAndSelect('project.csvRows', 'csvRows')
+            .loadRelationCountAndMap('project.csvRowCount', 'project.csvRows')
+            .loadRelationCountAndMap('project.csvColumnCount', 'project.csvColumns')
+            .loadRelationCountAndMap('project.generatedContentCount', 'project.generatedContents')
             .orderBy('project.createdAt', 'DESC');
 
         // If organizationId is provided, filter by it
@@ -54,9 +60,11 @@ export class ProjectsService {
     }
 
     async findOne(id: string, userId: string): Promise<Project> {
+        // DO NOT load csvRows or generatedContents - they can be huge!
+        // Only load organization and publishJobs for the project detail view
         const project = await this.projectRepository.findOne({
             where: { id },
-            relations: ['csvColumns', 'csvRows', 'generatedContents', 'publishJobs', 'organization'],
+            relations: ['csvColumns', 'publishJobs', 'organization'],
         });
 
         if (!project) {
@@ -70,13 +78,32 @@ export class ProjectsService {
     }
 
     async update(id: string, updateProjectDto: UpdateProjectDto, userId: string): Promise<Project> {
-        const project = await this.findOne(id, userId);
+        // Use a lightweight query for update - don't load relations
+        const project = await this.projectRepository.findOne({
+            where: { id },
+        });
+
+        if (!project) {
+            throw new NotFoundException(`Project with ID ${id} not found`);
+        }
+
+        await this.checkOrgMembership(project.organizationId, userId);
+
         Object.assign(project, updateProjectDto);
         return await this.projectRepository.save(project);
     }
 
     async remove(id: string, userId: string): Promise<void> {
-        const project = await this.findOne(id, userId);
+        // Use a lightweight query for delete - don't load relations
+        const project = await this.projectRepository.findOne({
+            where: { id },
+        });
+
+        if (!project) {
+            throw new NotFoundException(`Project with ID ${id} not found`);
+        }
+
+        await this.checkOrgMembership(project.organizationId, userId);
         await this.projectRepository.remove(project);
     }
 
@@ -85,9 +112,26 @@ export class ProjectsService {
         publishedContents: number;
         pendingContents: number;
     }> {
-        const project = await this.findOne(id, userId);
-        const totalContents = project.generatedContents?.length || 0;
-        const publishedContents = project.generatedContents?.filter(c => c.publishStatus === 'published').length || 0;
+        // Verify project exists and user has access (lightweight query)
+        const project = await this.projectRepository.findOne({
+            where: { id },
+        });
+
+        if (!project) {
+            throw new NotFoundException(`Project with ID ${id} not found`);
+        }
+
+        await this.checkOrgMembership(project.organizationId, userId);
+
+        // Use COUNT queries instead of loading all content
+        const totalContents = await this.generatedContentRepository.count({
+            where: { projectId: id },
+        });
+
+        const publishedContents = await this.generatedContentRepository.count({
+            where: { projectId: id, publishStatus: 'published' as any },
+        });
+
         const pendingContents = totalContents - publishedContents;
 
         return {

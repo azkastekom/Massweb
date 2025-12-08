@@ -7,6 +7,7 @@ import * as Handlebars from 'handlebars';
 import { GeneratedContent, PublishStatus } from '../entities/generated-content.entity';
 import { Project } from '../entities/project.entity';
 import { PublishJob, JobStatus } from '../entities/publish-job.entity';
+import { CsvRow } from '../entities/csv-row.entity';
 
 @Processor('content-generation')
 export class ContentGenerationProcessor {
@@ -17,6 +18,8 @@ export class ContentGenerationProcessor {
         private contentRepository: Repository<GeneratedContent>,
         @InjectRepository(Project)
         private projectRepository: Repository<Project>,
+        @InjectRepository(CsvRow)
+        private csvRowRepository: Repository<CsvRow>,
     ) { }
 
     @Process('generate-content')
@@ -24,9 +27,9 @@ export class ContentGenerationProcessor {
         const { projectId } = job.data;
         this.logger.log(`Starting content generation for project ${projectId}`);
 
+        // Fetch project WITHOUT loading csvRows relation
         const project = await this.projectRepository.findOne({
             where: { id: projectId },
-            relations: ['csvRows'],
         });
 
         if (!project) {
@@ -43,36 +46,59 @@ export class ContentGenerationProcessor {
             : null;
         const tagsTemplate = project.tagsTemplate ? Handlebars.compile(project.tagsTemplate) : null;
 
-        const total = project.csvRows.length;
+        // Count total rows
+        const total = await this.csvRowRepository.count({
+            where: { projectId },
+        });
 
-        for (let i = 0; i < total; i++) {
-            const row = project.csvRows[i];
-            const data = row.rowData;
+        // Process rows in batches
+        const BATCH_SIZE = 100;
+        let processedCount = 0;
+        let offset = 0;
 
-            const content = contentTemplate(data);
-            const title = titleTemplate ? titleTemplate(data) : String(Object.values(data)[0]);
-            const metaDescription = metaTemplate ? metaTemplate(data) : '';
-            const tags = tagsTemplate ? tagsTemplate(data) : '';
-            const slug = this.generateSlug(title, row.id);
-
-            const generatedContent = this.contentRepository.create({
-                projectId,
-                content,
-                title,
-                metaDescription,
-                tags,
-                slug,
-                publishStatus: PublishStatus.PENDING,
+        while (offset < total) {
+            const rows = await this.csvRowRepository.find({
+                where: { projectId },
+                order: { rowOrder: 'ASC' },
+                skip: offset,
+                take: BATCH_SIZE,
             });
 
-            await this.contentRepository.save(generatedContent);
+            const contentBatch: GeneratedContent[] = [];
+
+            for (const row of rows) {
+                const data = row.rowData;
+
+                const content = contentTemplate(data);
+                const title = titleTemplate ? titleTemplate(data) : String(Object.values(data)[0]);
+                const metaDescription = metaTemplate ? metaTemplate(data) : '';
+                const tags = tagsTemplate ? tagsTemplate(data) : '';
+                const slug = this.generateSlug(title, row.id);
+
+                const generatedContent = this.contentRepository.create({
+                    projectId,
+                    content,
+                    title,
+                    metaDescription,
+                    tags,
+                    slug,
+                    publishStatus: PublishStatus.PENDING,
+                });
+
+                contentBatch.push(generatedContent);
+            }
+
+            // Batch save
+            await this.contentRepository.save(contentBatch);
+            processedCount += contentBatch.length;
+            offset += rows.length;
 
             // Update progress
-            await job.progress((i + 1) / total * 100);
+            await job.progress((processedCount / total) * 100);
         }
 
         this.logger.log(`Completed content generation for project ${projectId}`);
-        return { generated: total };
+        return { generated: processedCount };
     }
 
     private generateSlug(title: string, id: string): string {

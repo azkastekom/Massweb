@@ -29,28 +29,32 @@ export class ContentGeneratorService {
     async generateContent(projectId: string): Promise<{ jobId: string; totalRows: number }> {
         const project = await this.projectRepository.findOne({
             where: { id: projectId },
-            relations: ['csvRows'],
         });
 
         if (!project) {
             throw new Error('Project not found');
         }
 
+        // Count rows instead of loading them all
+        const totalRows = await this.csvRowRepository.count({
+            where: { projectId },
+        });
+
         const job = await this.generationQueue.add('generate-content', {
             projectId,
-            totalRows: project.csvRows.length,
+            totalRows,
         });
 
         return {
             jobId: job.id.toString(),
-            totalRows: project.csvRows.length,
+            totalRows,
         };
     }
 
-    async generateContentSync(projectId: string): Promise<GeneratedContent[]> {
+    async generateContentSync(projectId: string): Promise<{ generatedCount: number }> {
+        // Fetch project WITHOUT loading csvRows relation
         const project = await this.projectRepository.findOne({
             where: { id: projectId },
-            relations: ['csvRows'],
         });
 
         if (!project) {
@@ -59,13 +63,17 @@ export class ContentGeneratorService {
 
         await this.contentRepository.delete({ projectId });
 
-        if (!project.csvRows || project.csvRows.length === 0) {
+        // Get just the first row to determine columns (don't load all rows)
+        const firstRow = await this.csvRowRepository.findOne({
+            where: { projectId },
+            order: { rowOrder: 'ASC' },
+        });
+
+        if (!firstRow) {
             throw new Error('No CSV data found');
         }
 
-        const generatedContents: GeneratedContent[] = [];
-        const firstRow = project.csvRows[0].rowData;
-        const allColumnNames = Object.keys(firstRow);
+        const allColumnNames = Object.keys(firstRow.rowData);
 
         let columnsToUse: string[];
         if (project.titleTemplate) {
@@ -74,31 +82,78 @@ export class ContentGeneratorService {
             columnsToUse = allColumnNames;
         }
 
-        const columnValues: Record<string, string[]> = {};
+        // Stream through CSV rows to collect unique values (don't load all at once)
+        const columnValues: Record<string, Set<string>> = {};
         for (const columnName of columnsToUse) {
-            const uniqueValues = new Set<string>();
-            for (const row of project.csvRows) {
-                const value = row.rowData[columnName];
-                if (value && value.trim()) {
-                    uniqueValues.add(value.trim());
-                }
-            }
-            columnValues[columnName] = Array.from(uniqueValues);
+            columnValues[columnName] = new Set<string>();
         }
 
-        const combinations = this.generateCombinations(columnValues, columnsToUse);
+        // Also get first value for non-combination columns
+        const firstValuesForOtherColumns: Record<string, string> = {};
+        for (const columnName of allColumnNames) {
+            if (!columnsToUse.includes(columnName)) {
+                firstValuesForOtherColumns[columnName] = firstRow.rowData[columnName] || '';
+            }
+        }
 
-        const enrichedCombinations = combinations.map(combo => {
-            const enriched = { ...combo };
-            for (const columnName of allColumnNames) {
-                if (!columnsToUse.includes(columnName)) {
-                    const firstValue = project.csvRows.find(row => row.rowData[columnName])?.rowData[columnName] || '';
-                    enriched[columnName] = firstValue;
+        // Stream through rows in batches to collect unique values
+        const FETCH_BATCH_SIZE = 500;
+        let offset = 0;
+        let hasMore = true;
+
+        while (hasMore) {
+            const rows = await this.csvRowRepository.find({
+                where: { projectId },
+                order: { rowOrder: 'ASC' },
+                skip: offset,
+                take: FETCH_BATCH_SIZE,
+            });
+
+            if (rows.length === 0) {
+                hasMore = false;
+                break;
+            }
+
+            for (const row of rows) {
+                for (const columnName of columnsToUse) {
+                    const value = row.rowData[columnName];
+                    if (value && value.trim()) {
+                        columnValues[columnName].add(value.trim());
+                    }
+                }
+                // Get first non-empty value for other columns
+                for (const columnName of allColumnNames) {
+                    if (!columnsToUse.includes(columnName) && !firstValuesForOtherColumns[columnName]) {
+                        if (row.rowData[columnName]) {
+                            firstValuesForOtherColumns[columnName] = row.rowData[columnName];
+                        }
+                    }
                 }
             }
-            return enriched;
-        });
 
+            offset += rows.length;
+            if (rows.length < FETCH_BATCH_SIZE) {
+                hasMore = false;
+            }
+        }
+
+        // Convert sets to arrays for combination generation
+        const columnValuesArray: Record<string, string[]> = {};
+        for (const columnName of columnsToUse) {
+            columnValuesArray[columnName] = Array.from(columnValues[columnName]);
+        }
+
+        // Safety check: limit combinations to prevent memory exhaustion
+        const MAX_COMBINATIONS = 10000;
+        let estimatedCombinations = 1;
+        for (const columnName of columnsToUse) {
+            estimatedCombinations *= (columnValuesArray[columnName]?.length || 1);
+            if (estimatedCombinations > MAX_COMBINATIONS) {
+                throw new Error(`Too many combinations (${estimatedCombinations}+). Maximum allowed is ${MAX_COMBINATIONS}. Consider reducing unique values in your title template columns or using fewer columns.`);
+            }
+        }
+
+        // Compile templates once
         const contentTemplate = Handlebars.compile(project.template);
         const titleTemplate = project.titleTemplate ? Handlebars.compile(project.titleTemplate) : null;
         const metaDescriptionTemplate = project.metaDescriptionTemplate
@@ -106,9 +161,30 @@ export class ContentGeneratorService {
             : null;
         const tagsTemplate = project.tagsTemplate ? Handlebars.compile(project.tagsTemplate) : null;
 
+        // Generate combinations iteratively and save in batches
         const usedSlugs = new Set<string>();
+        let generatedCount = 0;
+        const SAVE_BATCH_SIZE = 100;
+        let currentBatch: GeneratedContent[] = [];
 
-        for (const data of enrichedCombinations) {
+        // Iterative combination generation (no recursion, no intermediate objects)
+        const columnNamesList = columnsToUse;
+        const columnLengths = columnNamesList.map(name => columnValuesArray[name].length);
+        const totalCombinations = columnLengths.reduce((a, b) => a * b, 1);
+
+        for (let i = 0; i < totalCombinations; i++) {
+            // Calculate indices for this combination
+            const data: Record<string, string> = { ...firstValuesForOtherColumns };
+            let temp = i;
+            for (let j = columnNamesList.length - 1; j >= 0; j--) {
+                const columnName = columnNamesList[j];
+                const values = columnValuesArray[columnName];
+                const idx = temp % values.length;
+                data[columnName] = values[idx];
+                temp = Math.floor(temp / values.length);
+            }
+
+            // Generate content
             const content = contentTemplate(data);
             const title = titleTemplate ? titleTemplate(data) : this.generateDefaultTitle(data);
             const metaDescription = metaDescriptionTemplate ? metaDescriptionTemplate(data) : '';
@@ -132,39 +208,23 @@ export class ContentGeneratorService {
                 publishStatus: PublishStatus.PENDING,
             });
 
-            const saved = await this.contentRepository.save(generatedContent);
-            generatedContents.push(saved);
+            currentBatch.push(generatedContent);
+
+            // Save batch when it reaches the limit
+            if (currentBatch.length >= SAVE_BATCH_SIZE) {
+                await this.contentRepository.save(currentBatch);
+                generatedCount += currentBatch.length;
+                currentBatch = []; // Clear batch from memory
+            }
         }
 
-        return generatedContents;
-    }
-
-    private generateCombinations(
-        columnValues: Record<string, string[]>,
-        columnNames: string[],
-    ): Record<string, string>[] {
-        if (columnNames.length === 0) {
-            return [{}];
+        // Save remaining items
+        if (currentBatch.length > 0) {
+            await this.contentRepository.save(currentBatch);
+            generatedCount += currentBatch.length;
         }
 
-        const results: Record<string, string>[] = [];
-
-        const generate = (index: number, current: Record<string, string>) => {
-            if (index === columnNames.length) {
-                results.push({ ...current });
-                return;
-            }
-
-            const columnName = columnNames[index];
-            const values = columnValues[columnName] || [];
-
-            for (const value of values) {
-                generate(index + 1, { ...current, [columnName]: value });
-            }
-        };
-
-        generate(0, {});
-        return results;
+        return { generatedCount };
     }
 
     private extractColumnsFromTemplate(template: string, availableColumns: string[]): string[] {

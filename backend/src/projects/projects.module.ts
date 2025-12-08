@@ -6,11 +6,12 @@ import { Project } from '../entities/project.entity';
 import { CsvColumn } from '../entities/csv-column.entity';
 import { CsvRow } from '../entities/csv-row.entity';
 import { OrganizationMember } from '../entities/organization-member.entity';
+import { GeneratedContent } from '../entities/generated-content.entity';
 import { UploadModule } from '../upload/upload.module';
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([Project, CsvColumn, CsvRow, OrganizationMember]),
+        TypeOrmModule.forFeature([Project, CsvColumn, CsvRow, OrganizationMember, GeneratedContent]),
         UploadModule,
     ],
     controllers: [ProjectsController],
@@ -18,4 +19,3 @@ import { UploadModule } from '../upload/upload.module';
     exports: [ProjectsService],
 })
 export class ProjectsModule { }
-

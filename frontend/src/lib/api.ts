@@ -148,10 +148,11 @@ export const csvApi = {
         formData.append('file', file);
         return api.post<{
             columns: CsvColumn[];
-            rows: CsvRow[];
+            rowCount: number;
             totalCombinations: number;
         }>(`/csv/projects/${projectId}/upload`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 120000, // 2 minutes for large CSV uploads
         });
     },
     getData: (projectId: string) => api.get<{
@@ -172,7 +173,11 @@ export const uploadsApi = {
 
 export const contentApi = {
     generate: (projectId: string) => api.post<{ jobId: string; totalRows: number }>(`/content-generator/projects/${projectId}/generate`),
-    generateSync: (projectId: string) => api.post<GeneratedContent[]>(`/content-generator/projects/${projectId}/generate-sync`),
+    generateSync: (projectId: string) => api.post<{ generatedCount: number }>(
+        `/content-generator/projects/${projectId}/generate-sync`,
+        {},
+        { timeout: 300000 } // 5 minutes for large content generation
+    ),
     getContents: (projectId: string, page: number = 1, limit: number = 20, status?: string) =>
         api.get<{
             contents: GeneratedContent[];

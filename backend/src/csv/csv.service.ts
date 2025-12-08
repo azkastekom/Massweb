@@ -19,7 +19,7 @@ export class CsvService {
 
     async parseAndSaveCsv(projectId: string, file: Express.Multer.File): Promise<{
         columns: CsvColumn[];
-        rows: CsvRow[];
+        rowCount: number;
         totalCombinations: number;
     }> {
         const csvContent = file.buffer.toString('utf-8');
@@ -28,7 +28,6 @@ export class CsvService {
         const parsed = Papa.parse(csvContent, {
             header: true,
             skipEmptyLines: true,
-            // Let papaparse auto-detect delimiter
             transformHeader: (header) => header.trim(),
         });
 
@@ -51,66 +50,72 @@ export class CsvService {
         await this.csvColumnRepository.delete({ projectId });
         await this.csvRowRepository.delete({ projectId });
 
-        // Save column definitions
-        const columns: CsvColumn[] = [];
-        for (let i = 0; i < headers.length; i++) {
-            const column = this.csvColumnRepository.create({
+        // Save columns
+        const columnEntities: CsvColumn[] = headers.map((header, i) =>
+            this.csvColumnRepository.create({
                 projectId,
-                columnName: headers[i],
+                columnName: header,
                 columnType: 'text',
                 columnOrder: i,
-            });
-            columns.push(await this.csvColumnRepository.save(column));
-        }
+            })
+        );
+        const savedColumns = await this.csvColumnRepository.save(columnEntities);
 
-        // Save rows
-        const rows: CsvRow[] = [];
-        for (let i = 0; i < data.length; i++) {
-            const row = this.csvRowRepository.create({
-                projectId,
-                rowData: data[i],
-                rowOrder: i,
-            });
-            rows.push(await this.csvRowRepository.save(row));
-        }
-
-        // Calculate total combinations (Cartesian product)
-        const totalCombinations = this.calculateCombinations(data, headers);
-
-        return {
-            columns,
-            rows,
-            totalCombinations,
-        };
-    }
-
-    private calculateCombinations(data: Record<string, string>[], headers: string[]): number {
-        // Group rows by unique values in each column
+        // STREAMING BATCH SAVE - process in chunks without holding all entities in memory
+        const BATCH_SIZE = 200;
+        let rowCount = 0;
         const uniqueValuesByColumn: Map<string, Set<string>> = new Map();
 
+        // Initialize sets for combination calculation
         headers.forEach(header => {
             uniqueValuesByColumn.set(header, new Set());
         });
 
-        data.forEach(row => {
-            headers.forEach(header => {
-                if (row[header]) {
-                    const valueSet = uniqueValuesByColumn.get(header);
-                    if (valueSet) {
-                        valueSet.add(row[header]);
+        for (let i = 0; i < data.length; i += BATCH_SIZE) {
+            const batchData = data.slice(i, i + BATCH_SIZE);
+
+            // Create entities for this batch only
+            const batchEntities = batchData.map((rowData, idx) => {
+                // Track unique values for combinations while processing
+                headers.forEach(header => {
+                    if (rowData[header]) {
+                        uniqueValuesByColumn.get(header)?.add(rowData[header]);
                     }
-                }
+                });
+
+                return this.csvRowRepository.create({
+                    projectId,
+                    rowData,
+                    rowOrder: i + idx,
+                });
             });
-        });
 
-        // Calculate Cartesian product size
-        let total = 1;
+            // Save batch and discard from memory
+            await this.csvRowRepository.save(batchEntities);
+            rowCount += batchEntities.length;
+
+            // Allow GC to clean up
+            if (global.gc) {
+                global.gc();
+            }
+        }
+
+        // Calculate total combinations
+        let totalCombinations = 1;
         uniqueValuesByColumn.forEach(valueSet => {
-            total *= valueSet.size;
+            totalCombinations *= Math.max(valueSet.size, 1);
         });
 
-        return total;
+        // Clear the parsed data from memory
+        data.length = 0;
+
+        return {
+            columns: savedColumns,
+            rowCount,
+            totalCombinations,
+        };
     }
+
 
     async getCsvData(projectId: string): Promise<{
         columns: CsvColumn[];
