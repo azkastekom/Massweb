@@ -205,6 +205,7 @@ export class ContentGeneratorService {
                 metaDescription,
                 tags,
                 slug,
+                thumbnailUrl: project.thumbnailUrl || undefined, // Use project thumbnail
                 publishStatus: PublishStatus.PENDING,
             });
 
@@ -229,10 +230,25 @@ export class ContentGeneratorService {
 
     private extractColumnsFromTemplate(template: string, availableColumns: string[]): string[] {
         const extractedColumns: string[] = [];
-        const regex = /\{\{(\w+)\}\}/g;
+
+        // Match both:
+        // 1. {{columnName}} - simple variable names (no spaces)
+        // 2. {{[Column With Spaces]}} - bracket notation for names with spaces
+        const simpleRegex = /\{\{(\w+)\}\}/g;
+        const bracketRegex = /\{\{\[([^\]]+)\]\}\}/g;
+
         let match;
 
-        while ((match = regex.exec(template)) !== null) {
+        // First, extract simple variable names
+        while ((match = simpleRegex.exec(template)) !== null) {
+            const columnName = match[1];
+            if (availableColumns.includes(columnName) && !extractedColumns.includes(columnName)) {
+                extractedColumns.push(columnName);
+            }
+        }
+
+        // Then, extract bracket notation variables (for names with spaces)
+        while ((match = bracketRegex.exec(template)) !== null) {
             const columnName = match[1];
             if (availableColumns.includes(columnName) && !extractedColumns.includes(columnName)) {
                 extractedColumns.push(columnName);

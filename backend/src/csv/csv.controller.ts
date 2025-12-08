@@ -16,11 +16,24 @@ export class CsvController {
             throw new BadRequestException('No file uploaded');
         }
 
-        if (file.mimetype !== 'text/csv' && !file.originalname.endsWith('.csv')) {
-            throw new BadRequestException('File must be a CSV');
+        // Accept CSV and Excel files
+        const allowedMimeTypes = [
+            'text/csv',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ];
+        const allowedExtensions = ['.csv', '.xlsx', '.xls'];
+
+        const hasValidMimeType = allowedMimeTypes.includes(file.mimetype);
+        const hasValidExtension = allowedExtensions.some(ext =>
+            file.originalname.toLowerCase().endsWith(ext)
+        );
+
+        if (!hasValidMimeType && !hasValidExtension) {
+            throw new BadRequestException('File must be a CSV or Excel file (.csv, .xlsx, .xls)');
         }
 
-        return await this.csvService.parseAndSaveCsv(projectId, file);
+        return await this.csvService.parseAndSaveFile(projectId, file);
     }
 
     @Get('projects/:projectId')

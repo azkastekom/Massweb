@@ -261,16 +261,20 @@ function ProjectsPage() {
 function ProjectCard({ project }: { project: Project }) {
     const queryClient = useQueryClient()
 
+    // Helper function to format stats with 999+ for large numbers
+    const formatStat = (value: number | undefined): string => {
+        if (!value && value !== 0) return '0'
+        return value > 999 ? '999+' : String(value)
+    }
+
     const { data: stats } = useQuery({
         queryKey: ['project-stats', project.id],
         queryFn: async () => {
-            const response = await contentApi.getContents(project.id, 1, 1000)
-            const contents = response.data.contents
+            const response = await projectsApi.getStats(project.id)
             return {
-                total: contents.length,
-                published: contents.filter((c: any) => c.publishStatus === 'published').length,
-                pending: contents.filter((c: any) => c.publishStatus === 'pending').length,
-                failed: contents.filter((c: any) => c.publishStatus === 'failed').length,
+                total: response.data.totalContents,
+                published: response.data.publishedContents,
+                pending: response.data.pendingContents,
             }
         },
     })
@@ -344,15 +348,15 @@ function ProjectCard({ project }: { project: Project }) {
 
                     <div className="grid grid-cols-3 gap-2 mb-4">
                         <div className="text-center p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                            <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{stats?.total || 0}</p>
+                            <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatStat(stats?.total)}</p>
                             <p className="text-xs text-gray-600 dark:text-gray-400">Total</p>
                         </div>
                         <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                            <p className="text-lg font-bold text-green-600">{stats?.published || 0}</p>
+                            <p className="text-lg font-bold text-green-600">{formatStat(stats?.published)}</p>
                             <p className="text-xs text-gray-600 dark:text-gray-400">Live</p>
                         </div>
                         <div className="text-center p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                            <p className="text-lg font-bold text-yellow-600">{stats?.pending || 0}</p>
+                            <p className="text-lg font-bold text-yellow-600">{formatStat(stats?.pending)}</p>
                             <p className="text-xs text-gray-600 dark:text-gray-400">Queue</p>
                         </div>
                     </div>

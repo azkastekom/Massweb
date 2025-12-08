@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import { Project } from '../entities/project.entity';
 import { CsvColumn } from '../entities/csv-column.entity';
 import { CsvRow } from '../entities/csv-row.entity';
@@ -17,36 +18,37 @@ export class CsvService {
         private projectRepository: Repository<Project>,
     ) { }
 
-    async parseAndSaveCsv(projectId: string, file: Express.Multer.File): Promise<{
+    async parseAndSaveFile(projectId: string, file: Express.Multer.File): Promise<{
         columns: CsvColumn[];
         rowCount: number;
         totalCombinations: number;
     }> {
-        const csvContent = file.buffer.toString('utf-8');
+        const fileName = file.originalname.toLowerCase();
+        let data: Record<string, string>[];
+        let headers: string[];
 
-        // Parse CSV using PapaParse
-        const parsed = Papa.parse(csvContent, {
-            header: true,
-            skipEmptyLines: true,
-            transformHeader: (header) => header.trim(),
-        });
-
-        if (parsed.errors && parsed.errors.length > 0) {
-            throw new BadRequestException(`CSV parsing error: ${parsed.errors[0].message}`);
+        // Parse based on file type
+        if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+            // Parse Excel file
+            const result = this.parseExcelFile(file.buffer);
+            data = result.data;
+            headers = result.headers;
+        } else {
+            // Parse CSV file
+            const result = this.parseCsvFile(file.buffer);
+            data = result.data;
+            headers = result.headers;
         }
 
-        const data = parsed.data as Record<string, string>[];
-        const headers = parsed.meta.fields;
-
         if (!headers || headers.length === 0) {
-            throw new BadRequestException('CSV file must have headers');
+            throw new BadRequestException('File must have headers');
         }
 
         if (data.length === 0) {
-            throw new BadRequestException('CSV file must have at least one row of data');
+            throw new BadRequestException('File must have at least one row of data');
         }
 
-        // Delete existing CSV data for this project
+        // Delete existing data for this project
         await this.csvColumnRepository.delete({ projectId });
         await this.csvRowRepository.delete({ projectId });
 
@@ -93,11 +95,6 @@ export class CsvService {
             // Save batch and discard from memory
             await this.csvRowRepository.save(batchEntities);
             rowCount += batchEntities.length;
-
-            // Allow GC to clean up
-            if (global.gc) {
-                global.gc();
-            }
         }
 
         // Calculate total combinations
@@ -114,6 +111,68 @@ export class CsvService {
             rowCount,
             totalCombinations,
         };
+    }
+
+    private parseCsvFile(buffer: Buffer): { data: Record<string, string>[]; headers: string[] } {
+        const csvContent = buffer.toString('utf-8');
+
+        const parsed = Papa.parse(csvContent, {
+            header: true,
+            skipEmptyLines: true,
+            transformHeader: (header) => header.trim(),
+        });
+
+        if (parsed.errors && parsed.errors.length > 0) {
+            throw new BadRequestException(`CSV parsing error: ${parsed.errors[0].message}`);
+        }
+
+        return {
+            data: parsed.data as Record<string, string>[],
+            headers: parsed.meta.fields || [],
+        };
+    }
+
+    private parseExcelFile(buffer: Buffer): { data: Record<string, string>[]; headers: string[] } {
+        try {
+            const workbook = XLSX.read(buffer, { type: 'buffer' });
+
+            // Get the first sheet
+            const sheetName = workbook.SheetNames[0];
+            if (!sheetName) {
+                throw new BadRequestException('Excel file has no sheets');
+            }
+
+            const sheet = workbook.Sheets[sheetName];
+
+            // Convert to JSON with header row
+            const jsonData = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, {
+                raw: false,  // Get formatted strings instead of raw values
+                defval: '',  // Default value for empty cells
+            });
+
+            if (jsonData.length === 0) {
+                return { data: [], headers: [] };
+            }
+
+            // Get headers from first row keys
+            const headers = Object.keys(jsonData[0]).map(h => h.trim());
+
+            // Convert all values to strings
+            const data = jsonData.map(row => {
+                const stringRow: Record<string, string> = {};
+                for (const key of Object.keys(row)) {
+                    stringRow[key.trim()] = String(row[key] ?? '');
+                }
+                return stringRow;
+            });
+
+            return { data, headers };
+        } catch (error: any) {
+            if (error instanceof BadRequestException) {
+                throw error;
+            }
+            throw new BadRequestException(`Excel parsing error: ${error.message}`);
+        }
     }
 
 

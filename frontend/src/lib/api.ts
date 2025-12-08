@@ -86,6 +86,12 @@ export interface Project {
     updatedAt: string;
 }
 
+export interface ProjectStats {
+    totalContents: number;
+    publishedContents: number;
+    pendingContents: number;
+}
+
 export interface CsvColumn {
     id: string;
     projectId: string;

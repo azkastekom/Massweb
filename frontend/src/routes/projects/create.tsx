@@ -1,13 +1,14 @@
 import { createFileRoute, useNavigate, redirect } from '@tanstack/react-router'
 import { useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { projectsApi, csvApi, contentApi, organizationsApi } from '../../lib/api'
+import { useMutation } from '@tanstack/react-query'
+import { projectsApi, csvApi, contentApi } from '../../lib/api'
 import { Button, Card } from '@heroui/react'
 import { useDropzone } from 'react-dropzone'
-import { Upload, Sparkles, Copy } from 'lucide-react'
+import { Upload, Sparkles, Copy, Building2 } from 'lucide-react'
 import { RichTextEditor } from '../../components/RichTextEditor'
 import { ThumbnailUpload } from '../../components/ThumbnailUpload'
 import { TagInput } from '../../components/TagInput'
+import { useOrganization } from '../../contexts/organization-context'
 import Papa from 'papaparse'
 import toast from 'react-hot-toast'
 
@@ -23,8 +24,9 @@ export const Route = createFileRoute('/projects/create')({
 
 function CreateProjectPage() {
     const navigate = useNavigate()
+    const { currentOrganization } = useOrganization()
+
     const [formData, setFormData] = useState({
-        organizationId: '',
         name: '',
         description: '',
         template: '',
@@ -40,19 +42,20 @@ function CreateProjectPage() {
     const [errors, setErrors] = useState<string[]>([])
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
-    // Fetch user's organizations
-    const { data: organizations, isLoading: orgsLoading } = useQuery({
-        queryKey: ['organizations'],
-        queryFn: async () => {
-            const response = await organizationsApi.getAll()
-            return response.data
-        },
-    })
+    // Helper function to format column name for Handlebars template
+    // Columns with spaces need bracket notation: {{[Column Name]}}
+    const formatHandlebarsVar = (columnName: string): string => {
+        // Check if column name contains spaces or special characters
+        if (/\s/.test(columnName) || !/^\w+$/.test(columnName)) {
+            return `{{[${columnName}]}}`
+        }
+        return `{{${columnName}}}`
+    }
 
     const createProjectMutation = useMutation({
         mutationFn: async () => {
             const validationErrors: string[] = []
-            if (!formData.organizationId) validationErrors.push('Organization is required')
+            if (!currentOrganization) validationErrors.push('No organization selected')
             if (!formData.name.trim()) validationErrors.push('Project name is required')
             if (!formData.template.trim()) validationErrors.push('Template is required')
 
@@ -63,9 +66,15 @@ function CreateProjectPage() {
             setErrors([])
 
             try {
-                console.log('Creating project...', formData)
+                // Create project payload with current organization
+                const projectPayload = {
+                    ...formData,
+                    organizationId: currentOrganization!.id,
+                }
+
+                console.log('Creating project...', projectPayload)
                 const projectResponse = await Promise.race([
-                    projectsApi.create(formData),
+                    projectsApi.create(projectPayload),
                     new Promise((_, reject) =>
                         setTimeout(() => reject(new Error('Project creation timed out')), 30000)
                     )
@@ -128,33 +137,60 @@ function CreateProjectPage() {
     })
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
-        accept: { 'text/csv': ['.csv'] },
+        accept: {
+            'text/csv': ['.csv'],
+            'application/vnd.ms-excel': ['.xls'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+        },
         maxFiles: 1,
         onDrop: async (acceptedFiles) => {
             if (acceptedFiles.length > 0) {
                 const file = acceptedFiles[0]
                 setCsvFile(file)
 
-                const text = await file.text()
-                const firstLine = text.split('\n')[0]
+                const fileName = file.name.toLowerCase()
 
-                let delimiter = ','
-                if (firstLine.includes(';')) delimiter = ';'
-                else if (firstLine.includes('\t')) delimiter = '\t'
-                else if (firstLine.includes('|')) delimiter = '|'
-
-                Papa.parse(file, {
-                    header: true,
-                    preview: 1,
-                    delimiter: delimiter,
-                    complete: (results: any) => {
-                        console.log('Detected delimiter:', delimiter)
-                        console.log('Detected fields:', results.meta.fields)
-                        if (results.meta.fields) {
-                            setCsvColumns(results.meta.fields)
+                if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                    // Parse Excel file for column preview
+                    try {
+                        const arrayBuffer = await file.arrayBuffer()
+                        const XLSX = await import('xlsx')
+                        const workbook = XLSX.read(arrayBuffer, { type: 'array' })
+                        const sheetName = workbook.SheetNames[0]
+                        const sheet = workbook.Sheets[sheetName]
+                        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][]
+                        if (jsonData.length > 0) {
+                            const headers = jsonData[0].map((h: any) => String(h).trim())
+                            setCsvColumns(headers)
+                            console.log('Excel columns:', headers)
                         }
+                    } catch (error) {
+                        console.error('Error parsing Excel file:', error)
+                        toast.error('Error parsing Excel file')
                     }
-                })
+                } else {
+                    // Parse CSV file
+                    const text = await file.text()
+                    const firstLine = text.split('\n')[0]
+
+                    let delimiter = ','
+                    if (firstLine.includes(';')) delimiter = ';'
+                    else if (firstLine.includes('\t')) delimiter = '\t'
+                    else if (firstLine.includes('|')) delimiter = '|'
+
+                    Papa.parse(file, {
+                        header: true,
+                        preview: 1,
+                        delimiter: delimiter,
+                        complete: (results: any) => {
+                            console.log('Detected delimiter:', delimiter)
+                            console.log('Detected fields:', results.meta.fields)
+                            if (results.meta.fields) {
+                                setCsvColumns(results.meta.fields)
+                            }
+                        }
+                    })
+                }
             }
         },
     })
@@ -200,35 +236,26 @@ function CreateProjectPage() {
                 <Card className="p-6">
                     <h2 className="text-2xl font-bold mb-4">Project Details</h2>
                     <div className="space-y-4">
-                        {/* Organization Selector */}
+                        {/* Current Organization Display */}
                         <div>
                             <label className="block text-sm font-medium mb-2">
-                                Organization <span className="text-red-500">*</span>
+                                Organization
                             </label>
-                            {orgsLoading ? (
-                                <div className="text-sm text-gray-500">Loading organizations...</div>
-                            ) : organizations && organizations.length > 0 ? (
-                                <select
-                                    value={formData.organizationId}
-                                    onChange={(e) => setFormData({ ...formData, organizationId: e.target.value })}
-                                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    required
-                                >
-                                    <option value="">Select an organization</option>
-                                    {organizations.map((org) => (
-                                        <option key={org.id} value={org.id}>
-                                            {org.name}
-                                        </option>
-                                    ))}
-                                </select>
+                            {currentOrganization ? (
+                                <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                                    <Building2 className="w-5 h-5 text-blue-600" />
+                                    <span className="font-medium text-blue-800 dark:text-blue-200">
+                                        {currentOrganization.name}
+                                    </span>
+                                </div>
                             ) : (
                                 <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                                     <p className="text-sm text-yellow-800">
-                                        No organizations found. Please create an organization first.
+                                        No organization selected. Please select an organization from the header.
                                     </p>
                                 </div>
                             )}
-                            <p className="text-xs text-gray-500 mt-1">Select which organization this project belongs to</p>
+                            <p className="text-xs text-gray-500 mt-1">Project will be created in this organization</p>
                         </div>
 
                         <div>
@@ -283,7 +310,7 @@ function CreateProjectPage() {
 
                 <Card className="p-6">
                     <h2 className="text-2xl font-bold mb-4">
-                        Upload CSV Data
+                        Upload Data File
                         {csvFile && <span className="text-sm font-normal text-green-600 ml-2">✓ File uploaded</span>}
                     </h2>
                     <div
@@ -303,9 +330,9 @@ function CreateProjectPage() {
                             </div>
                         ) : (
                             <div>
-                                <p className="text-lg font-semibold mb-2">Drop your CSV file here</p>
+                                <p className="text-lg font-semibold mb-2">Drop your CSV or Excel file here</p>
                                 <p className="text-sm text-gray-500">or click to browse</p>
-                                <p className="text-xs text-gray-400 mt-2">Supports comma, semicolon, tab, and pipe delimiters</p>
+                                <p className="text-xs text-gray-400 mt-2">Supports .csv, .xlsx, .xls files</p>
                             </div>
                         )}
                     </div>
@@ -315,7 +342,7 @@ function CreateProjectPage() {
                                 Detected columns: {csvColumns.join(', ')}
                             </p>
                             <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                                Use these in your template as {'{{columnName}}'}
+                                Use these in your template. For columns with spaces, use bracket notation: {'{{[Column Name]}}'}
                             </p>
                         </div>
                     )}
@@ -332,20 +359,28 @@ function CreateProjectPage() {
                         <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                             <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">Available Variables (Click to Copy):</p>
                             <div className="flex flex-wrap gap-2">
-                                {csvColumns.map(col => (
-                                    <button
-                                        key={col}
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(`{{${col}}}`)
-                                            toast.success(`Copied {{${col}}}`, { duration: 2000 })
-                                        }}
-                                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-sm flex items-center gap-1 transition-colors"
-                                    >
-                                        <Copy className="w-3 h-3" />
-                                        {`{{${col}}}`}
-                                    </button>
-                                ))}
+                                {csvColumns.map(col => {
+                                    const varSyntax = formatHandlebarsVar(col)
+                                    return (
+                                        <button
+                                            key={col}
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(varSyntax)
+                                                toast.success(`Copied ${varSyntax}`, { duration: 2000 })
+                                            }}
+                                            className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-sm flex items-center gap-1 transition-colors"
+                                        >
+                                            <Copy className="w-3 h-3" />
+                                            {varSyntax}
+                                        </button>
+                                    )
+                                })}
                             </div>
+                            {csvColumns.some(col => /\s/.test(col)) && (
+                                <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                                    💡 Columns with spaces use bracket notation: {'{{[Column Name]}}'}
+                                </p>
+                            )}
                         </div>
                     )}
 
