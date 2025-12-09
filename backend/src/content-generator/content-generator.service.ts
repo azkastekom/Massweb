@@ -191,7 +191,7 @@ export class ContentGeneratorService {
             const tags = tagsTemplate ? tagsTemplate(data) : '';
 
             const slugBase = this.generateSlug(title, '');
-            const slug = `${projectId}/${slugBase}`;
+            const slug = `${slugBase}`;
 
             if (usedSlugs.has(slug)) {
                 continue;

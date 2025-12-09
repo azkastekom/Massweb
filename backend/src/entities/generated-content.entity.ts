@@ -30,7 +30,7 @@ export class GeneratedContent {
     @Column({ nullable: true })
     thumbnailUrl: string;
 
-    @Column({ unique: true })
+    @Column()
     slug: string;
 
     @Column({
