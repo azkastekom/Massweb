@@ -608,4 +608,59 @@ export class ContentGeneratorService {
 
         return content;
     }
+
+    /**
+     * Find contents by organization for public API (with pagination and optional project filter)
+     */
+    async findContentsByOrganization(
+        organizationId: string,
+        projectId?: string,
+        status?: string,
+        skip: number = 0,
+        take: number = 50,
+    ): Promise<[GeneratedContent[], number]> {
+        // First, get all project IDs for this organization
+        const projects = await this.projectRepository.find({
+            where: { organizationId },
+            select: ['id'],
+        });
+
+        const projectIds = projects.map(p => p.id);
+
+        if (projectIds.length === 0) {
+            return [[], 0];
+        }
+
+        // If a specific project is requested, filter to only that project (and verify it belongs to org)
+        let targetProjectIds = projectIds;
+        if (projectId) {
+            if (!projectIds.includes(projectId)) {
+                return [[], 0]; // Project doesn't belong to this organization
+            }
+            targetProjectIds = [projectId];
+        }
+
+        const where: any = { projectId: In(targetProjectIds) };
+
+        if (status) {
+            where.publishStatus = status as PublishStatus;
+        }
+
+        return await this.contentRepository.findAndCount({
+            where,
+            order: { createdAt: 'DESC' },
+            skip,
+            take,
+        });
+    }
+
+    /**
+     * Find all projects for an organization (for public API)
+     */
+    async findProjectsByOrganization(organizationId: string): Promise<Project[]> {
+        return await this.projectRepository.find({
+            where: { organizationId },
+            order: { createdAt: 'DESC' },
+        });
+    }
 }
