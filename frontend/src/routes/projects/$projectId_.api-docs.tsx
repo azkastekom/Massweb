@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { Card, Button } from '@heroui/react';
+import { Card } from '@heroui/react';
 import { Book, Key, Code as CodeIcon, FileCode, Building2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
@@ -66,8 +66,8 @@ export function ProjectApiDocsPage() {
             <button
               onClick={() => setActiveTab('organization')}
               className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors ${activeTab === 'organization'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
             >
               <Building2 className="w-4 h-4" />
@@ -76,8 +76,8 @@ export function ProjectApiDocsPage() {
             <button
               onClick={() => setActiveTab('project')}
               className={`flex items-center gap-2 px-4 py-2 border-b-2 transition-colors ${activeTab === 'project'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
             >
               <FileCode className="w-4 h-4" />
@@ -88,6 +88,78 @@ export function ProjectApiDocsPage() {
           {/* Organization Endpoints */}
           {activeTab === 'organization' && (
             <div className="space-y-6">
+              {/* Get Organization Categories */}
+              <div className="space-y-3">
+                <div className="flex items-baseline gap-2">
+                  <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-mono rounded">GET</span>
+                  <code className="text-sm">/public/organizations/{"{"}organizationId{"}"}/categories</code>
+                </div>
+                <p className="text-sm">Get all categories for an organization.</p>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold">Response:</p>
+                  <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-xs overflow-x-auto">
+                    {`{
+  "data": [
+    {
+      "id": "...",
+      "name": "Blog",
+      "slug": "blog",
+      "description": "Blog posts",
+      "color": "#3B82F6"
+    }
+  ],
+  "total": 3
+}`}
+                  </pre>
+                </div>
+              </div>
+
+              <hr />
+
+              {/* Get Contents by Category */}
+              <div className="space-y-3">
+                <div className="flex items-baseline gap-2">
+                  <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-mono rounded">GET</span>
+                  <code className="text-sm">/public/organizations/{"{"}organizationId{"}"}/categories/{"{"}categoryId{"}"}/contents</code>
+                </div>
+                <p className="text-sm">Get all contents from projects that belong to a specific category.</p>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold">Query Parameters:</p>
+                  <ul className="text-sm space-y-1 ml-4">
+                    <li><code className="px-1 bg-gray-100 rounded text-xs">status</code> - Filter by status (published, pending, failed)</li>
+                    <li><code className="px-1 bg-gray-100 rounded text-xs">page</code> - Page number (default: 1)</li>
+                    <li><code className="px-1 bg-gray-100 rounded text-xs">limit</code> - Items per page (default: 50, max: 100)</li>
+                  </ul>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold">Response:</p>
+                  <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-xs overflow-x-auto">
+                    {`{
+  "data": [
+    {
+      "id": "...",
+      "projectId": "...",
+      "title": "...",
+      "content": "...",
+      "slug": "...",
+      "publishStatus": "published",
+      "createdAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "total": 50,
+  "page": 1,
+  "limit": 50,
+  "totalPages": 1
+}`}
+                  </pre>
+                </div>
+              </div>
+
+              <hr />
+
               {/* Get Organization Projects */}
               <div className="space-y-3">
                 <div className="flex items-baseline gap-2">
@@ -106,7 +178,9 @@ export function ProjectApiDocsPage() {
       "name": "My Project",
       "description": "...",
       "thumbnailUrl": "...",
-      "categories": ["cat1", "cat2"],
+      "categories": [
+        { "id": "...", "name": "Blog", "slug": "blog", "color": "#3B82F6" }
+      ],
       "createdAt": "2024-01-01T00:00:00.000Z",
       "updatedAt": "2024-01-01T00:00:00.000Z"
     }
@@ -250,8 +324,8 @@ export function ProjectApiDocsPage() {
             <button
               onClick={() => setActiveCodeTab('org-examples')}
               className={`px-4 py-2 border-b-2 transition-colors ${activeCodeTab === 'org-examples'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
             >
               Organization API
@@ -259,8 +333,8 @@ export function ProjectApiDocsPage() {
             <button
               onClick={() => setActiveCodeTab('project-examples')}
               className={`px-4 py-2 border-b-2 transition-colors ${activeCodeTab === 'project-examples'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
             >
               Project API

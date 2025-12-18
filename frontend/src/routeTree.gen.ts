@@ -14,6 +14,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProjectsIndexRouteImport } from './routes/projects/index'
+import { Route as ContentsIndexRouteImport } from './routes/contents/index'
 import { Route as ProjectsCreateRouteImport } from './routes/projects/create'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projectId'
 import { Route as OrganizationsCreateRouteImport } from './routes/organizations/create'
@@ -24,6 +25,7 @@ import { Route as AdminJobsRouteImport } from './routes/admin/jobs'
 import { Route as ProjectsProjectIdApiDocsRouteImport } from './routes/projects/$projectId_.api-docs'
 import { Route as OrganizationsOrganizationIdSettingsRouteImport } from './routes/organizations/$organizationId.settings'
 import { Route as OrganizationsOrganizationIdMembersRouteImport } from './routes/organizations/$organizationId.members'
+import { Route as OrganizationsOrganizationIdCategoriesRouteImport } from './routes/organizations/$organizationId.categories'
 import { Route as OrganizationsOrganizationIdApiKeysRouteImport } from './routes/organizations/$organizationId.api-keys'
 
 const RegisterRoute = RegisterRouteImport.update({
@@ -49,6 +51,11 @@ const IndexRoute = IndexRouteImport.update({
 const ProjectsIndexRoute = ProjectsIndexRouteImport.update({
   id: '/projects/',
   path: '/projects/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContentsIndexRoute = ContentsIndexRouteImport.update({
+  id: '/contents/',
+  path: '/contents/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsCreateRoute = ProjectsCreateRouteImport.update({
@@ -104,6 +111,12 @@ const OrganizationsOrganizationIdMembersRoute =
     path: '/organizations/$organizationId/members',
     getParentRoute: () => rootRouteImport,
   } as any)
+const OrganizationsOrganizationIdCategoriesRoute =
+  OrganizationsOrganizationIdCategoriesRouteImport.update({
+    id: '/organizations/$organizationId/categories',
+    path: '/organizations/$organizationId/categories',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const OrganizationsOrganizationIdApiKeysRoute =
   OrganizationsOrganizationIdApiKeysRouteImport.update({
     id: '/organizations/$organizationId/api-keys',
@@ -123,8 +136,10 @@ export interface FileRoutesByFullPath {
   '/organizations/create': typeof OrganizationsCreateRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/projects/create': typeof ProjectsCreateRoute
+  '/contents': typeof ContentsIndexRoute
   '/projects': typeof ProjectsIndexRoute
   '/organizations/$organizationId/api-keys': typeof OrganizationsOrganizationIdApiKeysRoute
+  '/organizations/$organizationId/categories': typeof OrganizationsOrganizationIdCategoriesRoute
   '/organizations/$organizationId/members': typeof OrganizationsOrganizationIdMembersRoute
   '/organizations/$organizationId/settings': typeof OrganizationsOrganizationIdSettingsRoute
   '/projects/$projectId/api-docs': typeof ProjectsProjectIdApiDocsRoute
@@ -141,8 +156,10 @@ export interface FileRoutesByTo {
   '/organizations/create': typeof OrganizationsCreateRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/projects/create': typeof ProjectsCreateRoute
+  '/contents': typeof ContentsIndexRoute
   '/projects': typeof ProjectsIndexRoute
   '/organizations/$organizationId/api-keys': typeof OrganizationsOrganizationIdApiKeysRoute
+  '/organizations/$organizationId/categories': typeof OrganizationsOrganizationIdCategoriesRoute
   '/organizations/$organizationId/members': typeof OrganizationsOrganizationIdMembersRoute
   '/organizations/$organizationId/settings': typeof OrganizationsOrganizationIdSettingsRoute
   '/projects/$projectId/api-docs': typeof ProjectsProjectIdApiDocsRoute
@@ -160,8 +177,10 @@ export interface FileRoutesById {
   '/organizations/create': typeof OrganizationsCreateRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/projects/create': typeof ProjectsCreateRoute
+  '/contents/': typeof ContentsIndexRoute
   '/projects/': typeof ProjectsIndexRoute
   '/organizations/$organizationId/api-keys': typeof OrganizationsOrganizationIdApiKeysRoute
+  '/organizations/$organizationId/categories': typeof OrganizationsOrganizationIdCategoriesRoute
   '/organizations/$organizationId/members': typeof OrganizationsOrganizationIdMembersRoute
   '/organizations/$organizationId/settings': typeof OrganizationsOrganizationIdSettingsRoute
   '/projects/$projectId_/api-docs': typeof ProjectsProjectIdApiDocsRoute
@@ -180,8 +199,10 @@ export interface FileRouteTypes {
     | '/organizations/create'
     | '/projects/$projectId'
     | '/projects/create'
+    | '/contents'
     | '/projects'
     | '/organizations/$organizationId/api-keys'
+    | '/organizations/$organizationId/categories'
     | '/organizations/$organizationId/members'
     | '/organizations/$organizationId/settings'
     | '/projects/$projectId/api-docs'
@@ -198,8 +219,10 @@ export interface FileRouteTypes {
     | '/organizations/create'
     | '/projects/$projectId'
     | '/projects/create'
+    | '/contents'
     | '/projects'
     | '/organizations/$organizationId/api-keys'
+    | '/organizations/$organizationId/categories'
     | '/organizations/$organizationId/members'
     | '/organizations/$organizationId/settings'
     | '/projects/$projectId/api-docs'
@@ -216,8 +239,10 @@ export interface FileRouteTypes {
     | '/organizations/create'
     | '/projects/$projectId'
     | '/projects/create'
+    | '/contents/'
     | '/projects/'
     | '/organizations/$organizationId/api-keys'
+    | '/organizations/$organizationId/categories'
     | '/organizations/$organizationId/members'
     | '/organizations/$organizationId/settings'
     | '/projects/$projectId_/api-docs'
@@ -232,8 +257,10 @@ export interface RootRouteChildren {
   OrganizationsCreateRoute: typeof OrganizationsCreateRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
   ProjectsCreateRoute: typeof ProjectsCreateRoute
+  ContentsIndexRoute: typeof ContentsIndexRoute
   ProjectsIndexRoute: typeof ProjectsIndexRoute
   OrganizationsOrganizationIdApiKeysRoute: typeof OrganizationsOrganizationIdApiKeysRoute
+  OrganizationsOrganizationIdCategoriesRoute: typeof OrganizationsOrganizationIdCategoriesRoute
   OrganizationsOrganizationIdMembersRoute: typeof OrganizationsOrganizationIdMembersRoute
   OrganizationsOrganizationIdSettingsRoute: typeof OrganizationsOrganizationIdSettingsRoute
   ProjectsProjectIdApiDocsRoute: typeof ProjectsProjectIdApiDocsRoute
@@ -274,6 +301,13 @@ declare module '@tanstack/react-router' {
       path: '/projects'
       fullPath: '/projects'
       preLoaderRoute: typeof ProjectsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contents/': {
+      id: '/contents/'
+      path: '/contents'
+      fullPath: '/contents'
+      preLoaderRoute: typeof ContentsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/create': {
@@ -346,6 +380,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrganizationsOrganizationIdMembersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/organizations/$organizationId/categories': {
+      id: '/organizations/$organizationId/categories'
+      path: '/organizations/$organizationId/categories'
+      fullPath: '/organizations/$organizationId/categories'
+      preLoaderRoute: typeof OrganizationsOrganizationIdCategoriesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/organizations/$organizationId/api-keys': {
       id: '/organizations/$organizationId/api-keys'
       path: '/organizations/$organizationId/api-keys'
@@ -379,9 +420,12 @@ const rootRouteChildren: RootRouteChildren = {
   OrganizationsCreateRoute: OrganizationsCreateRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRoute,
   ProjectsCreateRoute: ProjectsCreateRoute,
+  ContentsIndexRoute: ContentsIndexRoute,
   ProjectsIndexRoute: ProjectsIndexRoute,
   OrganizationsOrganizationIdApiKeysRoute:
     OrganizationsOrganizationIdApiKeysRoute,
+  OrganizationsOrganizationIdCategoriesRoute:
+    OrganizationsOrganizationIdCategoriesRoute,
   OrganizationsOrganizationIdMembersRoute:
     OrganizationsOrganizationIdMembersRoute,
   OrganizationsOrganizationIdSettingsRoute:

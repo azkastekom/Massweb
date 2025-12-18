@@ -31,8 +31,9 @@ export class CreateProjectDto {
     @IsOptional()
     publishDelaySeconds?: number = 5;
 
+    // Array of category IDs to associate with the project
     @IsOptional()
     @IsArray()
     @IsString({ each: true })
-    categories?: string[];
+    categoryIds?: string[];
 }

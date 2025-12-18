@@ -10,6 +10,7 @@ import { User } from '../entities/user.entity';
 import { Organization } from '../entities/organization.entity';
 import { OrganizationMember } from '../entities/organization-member.entity';
 import { ApiKey } from '../entities/api-key.entity';
+import { Category } from '../entities/category.entity';
 
 @Global()
 @Module({
@@ -37,6 +38,7 @@ import { ApiKey } from '../entities/api-key.entity';
                     Organization,
                     OrganizationMember,
                     ApiKey,
+                    Category,
                 ],
                 synchronize: true, // Auto-create tables (change to false after first deploy)
                 logging: configService.get('NODE_ENV') === 'development',

@@ -128,6 +128,43 @@ export class ContentGeneratorController {
         return await this.contentGeneratorService.getOverallStats(organizationId);
     }
 
+    @Get('organizations/:organizationId/contents')
+    async searchOrganizationContents(
+        @Param('organizationId') organizationId: string,
+        @Query('projectId') projectId?: string,
+        @Query('categoryId') categoryId?: string,
+        @Query('status') status?: string,
+        @Query('search') search?: string,
+        @Query('page') page: number = 1,
+        @Query('limit') limit: number = 20,
+    ) {
+        const skip = (Number(page) - 1) * Number(limit);
+        const result = await this.contentGeneratorService.searchContentsByOrganization(
+            organizationId,
+            {
+                projectId,
+                categoryId,
+                status,
+                search,
+                skip,
+                take: Number(limit),
+            },
+        );
+
+        return {
+            contents: result.contents,
+            projects: result.projects.map(p => ({
+                id: p.id,
+                name: p.name,
+                categories: p.categories,
+            })),
+            total: result.total,
+            page: Number(page),
+            limit: Number(limit),
+            totalPages: Math.ceil(result.total / Number(limit)),
+        };
+    }
+
     @Get('projects/:projectId/export')
     async exportContent(
         @Param('projectId') projectId: string,

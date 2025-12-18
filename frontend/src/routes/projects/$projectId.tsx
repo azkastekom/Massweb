@@ -188,12 +188,20 @@ function ProjectDetailPage() {
                 {/* Categories */}
                 {project.categories && project.categories.length > 0 && (
                     <div className="flex flex-wrap gap-2">
-                        {project.categories.map((category, index) => (
+                        {project.categories.map((category) => (
                             <span
-                                key={index}
-                                className="px-3 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-full text-sm font-medium"
+                                key={category.id}
+                                className="px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1.5"
+                                style={{
+                                    backgroundColor: category.color ? `${category.color}20` : '#3B82F620',
+                                    color: category.color || '#3B82F6',
+                                }}
                             >
-                                {category}
+                                <span
+                                    className="w-2 h-2 rounded-full"
+                                    style={{ backgroundColor: category.color || '#3B82F6' }}
+                                />
+                                {category.name}
                             </span>
                         ))}
                     </div>

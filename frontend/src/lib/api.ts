@@ -51,6 +51,18 @@ export interface Organization {
     updatedAt: string;
 }
 
+// Category type for project organization - cache bust 2025-12-18
+export interface Category {
+    id: string;
+    name: string;
+    slug: string;
+    description?: string;
+    color?: string;
+    organizationId: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
 export interface LoginRequest {
     email: string;
     password: string;
@@ -81,7 +93,7 @@ export interface Project {
     tagsTemplate?: string;
     publishDelaySeconds: number;
     thumbnailUrl?: string;
-    categories?: string[];
+    categories?: Category[];
     createdAt: string;
     updatedAt: string;
 }
@@ -135,8 +147,8 @@ export const projectsApi = {
     },
     getById: (id: string) => api.get<Project>(`/projects/${id}`),
     getStats: (id: string) => api.get<ProjectStats>(`/projects/${id}/stats`),
-    create: (data: Partial<Project>) => api.post<Project>('/projects', data),
-    update: (id: string, data: Partial<Project>) => api.put<Project>(`/projects/${id}`, data),
+    create: (data: Partial<Project> & { categoryIds?: string[] }) => api.post<Project>('/projects', data),
+    update: (id: string, data: Partial<Project> & { categoryIds?: string[] }) => api.put<Project>(`/projects/${id}`, data),
     delete: (id: string) => api.delete(`/projects/${id}`),
     uploadThumbnail: (id: string, file: File) => {
         const formData = new FormData();
@@ -233,6 +245,34 @@ export const contentApi = {
             completedJobsToday: number;
         }>(`/content-generator/overall-stats${params}`);
     },
+    searchOrganizationContents: (
+        organizationId: string,
+        options: {
+            projectId?: string;
+            categoryId?: string;
+            status?: string;
+            search?: string;
+            page?: number;
+            limit?: number;
+        } = {}
+    ) => {
+        const params = new URLSearchParams();
+        if (options.projectId) params.append('projectId', options.projectId);
+        if (options.categoryId) params.append('categoryId', options.categoryId);
+        if (options.status) params.append('status', options.status);
+        if (options.search) params.append('search', options.search);
+        if (options.page) params.append('page', options.page.toString());
+        if (options.limit) params.append('limit', options.limit.toString());
+
+        return api.get<{
+            contents: GeneratedContent[];
+            projects: { id: string; name: string; categories: Category[] }[];
+            total: number;
+            page: number;
+            limit: number;
+            totalPages: number;
+        }>(`/content-generator/organizations/${organizationId}/contents?${params.toString()}`);
+    },
 };
 
 // Auth API
@@ -262,3 +302,15 @@ export const organizationsApi = {
     leaveOrganization: (id: string) =>
         api.post(`/organizations/${id}/leave`),
 };
+
+// Categories API
+export const categoriesApi = {
+    getByOrganization: (organizationId: string) => api.get<Category[]>(`/categories/organization/${organizationId}`),
+    getById: (id: string) => api.get<Category>(`/categories/${id}`),
+    create: (data: { organizationId: string; name: string; description?: string; color?: string }) =>
+        api.post<Category>('/categories', data),
+    update: (id: string, data: { name?: string; description?: string; color?: string }) =>
+        api.patch<Category>(`/categories/${id}`, data),
+    delete: (id: string) => api.delete(`/categories/${id}`),
+};
+

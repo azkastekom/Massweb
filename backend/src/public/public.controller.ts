@@ -1,10 +1,83 @@
 import { Controller, Get, Param, Query, UseGuards, ParseIntPipe, DefaultValuePipe, Request, ForbiddenException } from '@nestjs/common';
 import { ApiKeyGuard } from '../auth/guards/api-key.guard';
 import { ContentGeneratorService } from '../content-generator/content-generator.service';
+import { CategoriesService } from '../categories/categories.service';
 
 @Controller('public')
 export class PublicController {
-    constructor(private readonly contentGeneratorService: ContentGeneratorService) { }
+    constructor(
+        private readonly contentGeneratorService: ContentGeneratorService,
+        private readonly categoriesService: CategoriesService,
+    ) { }
+
+    /**
+     * Get all categories for an organization
+     * Requires API key authentication
+     */
+    @Get('organizations/:organizationId/categories')
+    @UseGuards(ApiKeyGuard)
+    async getOrganizationCategories(
+        @Param('organizationId') organizationId: string,
+        @Request() req?: any,
+    ) {
+        // Verify the API key belongs to this organization
+        if (req.organizationId !== organizationId) {
+            throw new ForbiddenException('API key does not have access to this organization');
+        }
+
+        const categories = await this.categoriesService.findByOrganization(organizationId);
+
+        return {
+            data: categories.map(c => ({
+                id: c.id,
+                name: c.name,
+                slug: c.slug,
+                description: c.description,
+                color: c.color,
+            })),
+            total: categories.length,
+        };
+    }
+
+    /**
+     * Get all contents for a category
+     * Requires API key authentication
+     */
+    @Get('organizations/:organizationId/categories/:categoryId/contents')
+    @UseGuards(ApiKeyGuard)
+    async getCategoryContents(
+        @Param('organizationId') organizationId: string,
+        @Param('categoryId') categoryId: string,
+        @Query('status') status?: string,
+        @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+        @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number = 50,
+        @Request() req?: any,
+    ) {
+        // Verify the API key belongs to this organization
+        if (req.organizationId !== organizationId) {
+            throw new ForbiddenException('API key does not have access to this organization');
+        }
+
+        // Limit max items per page
+        const maxLimit = Math.min(limit, 100);
+        const skip = (page - 1) * maxLimit;
+
+        const [contents, total] = await this.contentGeneratorService.findContentsByCategory(
+            categoryId,
+            organizationId,
+            status,
+            skip,
+            maxLimit,
+        );
+
+        return {
+            data: contents,
+            total,
+            page,
+            limit: maxLimit,
+            totalPages: Math.ceil(total / maxLimit),
+        };
+    }
 
     /**
      * Get all contents for an organization (optionally filtered by project)
@@ -24,6 +97,7 @@ export class PublicController {
         if (req.organizationId !== organizationId) {
             throw new ForbiddenException('API key does not have access to this organization');
         }
+
 
         // Limit max items per page
         const maxLimit = Math.min(limit, 100);
@@ -70,7 +144,12 @@ export class PublicController {
                 name: p.name,
                 description: p.description,
                 thumbnailUrl: p.thumbnailUrl,
-                categories: p.categories,
+                categories: p.categories?.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    slug: c.slug,
+                    color: c.color,
+                })),
                 createdAt: p.createdAt,
                 updatedAt: p.updatedAt,
             })),
@@ -124,4 +203,5 @@ export class PublicController {
         return this.contentGeneratorService.findOnePublic(contentId);
     }
 }
+
 

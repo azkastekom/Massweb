@@ -1,6 +1,6 @@
 import { Link, Outlet } from '@tanstack/react-router';
 import { useAuth } from '../contexts/auth-context';
-import { LogOut, User, FolderKanban, Shield } from 'lucide-react';
+import { LogOut, User, FolderKanban, Shield, FileText } from 'lucide-react';
 import { OrganizationSwitcher } from './OrganizationSwitcher';
 
 export default function Layout() {
@@ -29,6 +29,14 @@ export default function Layout() {
                                             activeProps={{ className: 'text-blue-600 bg-blue-50' }}
                                         >
                                             Projects
+                                        </Link>
+                                        <Link
+                                            to="/contents"
+                                            className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1"
+                                            activeProps={{ className: 'text-blue-600 bg-blue-50' }}
+                                        >
+                                            <FileText className="w-4 h-4" />
+                                            Contents
                                         </Link>
                                         {user?.isSuperAdmin && (
                                             <Link

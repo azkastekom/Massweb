@@ -1,13 +1,13 @@
-import { createFileRoute, useNavigate, redirect } from '@tanstack/react-router'
+import { createFileRoute, useNavigate, redirect, Link } from '@tanstack/react-router'
 import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
-import { projectsApi, csvApi, contentApi } from '../../lib/api'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { projectsApi, csvApi, contentApi, categoriesApi } from '../../lib/api'
+import type { Category } from '../../lib/api'
 import { Button, Card } from '@heroui/react'
 import { useDropzone } from 'react-dropzone'
-import { Upload, Sparkles, Copy, Building2 } from 'lucide-react'
+import { Upload, Sparkles, Copy, Building2, Tag, Plus } from 'lucide-react'
 import { RichTextEditor } from '../../components/RichTextEditor'
 import { ThumbnailUpload } from '../../components/ThumbnailUpload'
-import { TagInput } from '../../components/TagInput'
 import { useOrganization } from '../../contexts/organization-context'
 import Papa from 'papaparse'
 import toast from 'react-hot-toast'
@@ -34,13 +34,24 @@ function CreateProjectPage() {
         metaDescriptionTemplate: '',
         tagsTemplate: '',
         slugTemplate: '',
-        categories: [] as string[],
     })
+    const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([])
     const [csvFile, setCsvFile] = useState<File | null>(null)
     const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
     const [csvColumns, setCsvColumns] = useState<string[]>([])
     const [errors, setErrors] = useState<string[]>([])
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+    // Fetch organization categories
+    const { data: categories = [] } = useQuery({
+        queryKey: ['categories', currentOrganization?.id],
+        queryFn: async () => {
+            if (!currentOrganization?.id) return [];
+            const res = await categoriesApi.getByOrganization(currentOrganization.id);
+            return res.data;
+        },
+        enabled: !!currentOrganization?.id,
+    });
 
     // Helper function to format column name for Handlebars template
     // Columns with spaces need bracket notation: {{[Column Name]}}
@@ -50,6 +61,14 @@ function CreateProjectPage() {
             return `{{[${columnName}]}}`
         }
         return `{{${columnName}}}`
+    }
+
+    const toggleCategory = (categoryId: string) => {
+        setSelectedCategoryIds(prev =>
+            prev.includes(categoryId)
+                ? prev.filter(id => id !== categoryId)
+                : [...prev, categoryId]
+        )
     }
 
     const createProjectMutation = useMutation({
@@ -66,10 +85,11 @@ function CreateProjectPage() {
             setErrors([])
 
             try {
-                // Create project payload with current organization
+                // Create project payload with current organization and category IDs
                 const projectPayload = {
                     ...formData,
                     organizationId: currentOrganization!.id,
+                    categoryIds: selectedCategoryIds,
                 }
 
                 console.log('Creating project...', projectPayload)
@@ -295,15 +315,54 @@ function CreateProjectPage() {
                             />
                         </div>
 
-                        {/* Categories Input */}
+                        {/* Categories Selection */}
                         <div>
-                            <label className="block text-sm font-medium mb-2">Categories</label>
-                            <TagInput
-                                value={formData.categories}
-                                onChange={(categories) => setFormData({ ...formData, categories })}
-                                placeholder="Add project categories..."
-                            />
-                            <p className="text-xs text-gray-500 mt-1">Add tags to categorize your project</p>
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="block text-sm font-medium">Categories</label>
+                                {currentOrganization && (
+                                    <Link
+                                        to={`/organizations/${currentOrganization.id}/categories`}
+                                        className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                                    >
+                                        <Plus className="w-3 h-3" />
+                                        Manage Categories
+                                    </Link>
+                                )}
+                            </div>
+                            {categories.length > 0 ? (
+                                <div className="flex flex-wrap gap-2 p-3 border rounded-lg bg-gray-50 dark:bg-gray-800">
+                                    {categories.map((category: Category) => (
+                                        <button
+                                            key={category.id}
+                                            onClick={() => toggleCategory(category.id)}
+                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-all ${selectedCategoryIds.includes(category.id)
+                                                ? 'bg-blue-600 text-white'
+                                                : 'bg-white dark:bg-gray-700 border hover:border-blue-400'
+                                                }`}
+                                        >
+                                            <div
+                                                className="w-3 h-3 rounded-full"
+                                                style={{ backgroundColor: category.color || '#3B82F6' }}
+                                            />
+                                            {category.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 text-center">
+                                    <Tag className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                                    <p className="text-sm text-gray-500">No categories available</p>
+                                    {currentOrganization && (
+                                        <Link
+                                            to={`/organizations/${currentOrganization.id}/categories`}
+                                            className="text-sm text-blue-600 hover:text-blue-700"
+                                        >
+                                            Create categories
+                                        </Link>
+                                    )}
+                                </div>
+                            )}
+                            <p className="text-xs text-gray-500 mt-1">Select categories to organize this project</p>
                         </div>
                     </div>
                 </Card>

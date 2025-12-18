@@ -13,6 +13,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
 import { AdminModule } from './admin/admin.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { PublicModule } from './public/public.module';
+import { CategoriesModule } from './categories/categories.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { PublicModule } from './public/public.module';
     AdminModule,
     ApiKeysModule,
     PublicModule,
+    CategoriesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

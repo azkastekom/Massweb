@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { organizationsApi, projectsApi } from '../../lib/api';
 import { Card, Button } from '@heroui/react';
-import { ArrowLeft, Trash2, Building2, LogOut, Key } from 'lucide-react';
+import { ArrowLeft, Trash2, Building2, LogOut, Key, Tag } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useOrganization } from '../../contexts/organization-context';
 import { useAuth } from '../../contexts/auth-context';
@@ -22,7 +22,7 @@ function OrganizationSettingsPage() {
   const { organizationId } = Route.useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { currentOrganization, switchOrganization, organizations } = useOrganization();
+  const { switchOrganization, organizations } = useOrganization();
   const { user } = useAuth();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -177,7 +177,7 @@ function OrganizationSettingsPage() {
                 />
                 <Button
                   onClick={() => updateMutation.mutate()}
-                  disabled={updateMutation.isPending || !organizationName.trim()}
+                  isDisabled={updateMutation.isPending || !organizationName.trim()}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
                   {updateMutation.isPending ? 'Saving...' : 'Save'}
@@ -277,13 +277,20 @@ function OrganizationSettingsPage() {
         </div>
       </Card>
 
-      {/* Members Link */}
-      <div className="mt-6 flex gap-4">
+      {/* Quick Links */}
+      <div className="mt-6 flex flex-wrap gap-4">
         <Link
           to={`/organizations/${organizationId}/members`}
           className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
           Manage Members
+        </Link>
+        <Link
+          to={`/organizations/${organizationId}/categories`}
+          className="inline-flex items-center px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+        >
+          <Tag className="w-4 h-4 mr-2" />
+          Categories
         </Link>
         <Link
           to={`/organizations/${organizationId}/api-keys`}
@@ -296,3 +303,4 @@ function OrganizationSettingsPage() {
     </div>
   );
 }
+

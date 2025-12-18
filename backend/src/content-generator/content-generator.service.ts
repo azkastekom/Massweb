@@ -660,7 +660,122 @@ export class ContentGeneratorService {
     async findProjectsByOrganization(organizationId: string): Promise<Project[]> {
         return await this.projectRepository.find({
             where: { organizationId },
+            relations: ['categories'],
             order: { createdAt: 'DESC' },
         });
     }
+
+    /**
+     * Find contents by category (for public API)
+     * Returns all contents from projects that have the specified category
+     */
+    async findContentsByCategory(
+        categoryId: string,
+        organizationId: string,
+        status?: string,
+        skip: number = 0,
+        take: number = 50,
+    ): Promise<[GeneratedContent[], number]> {
+        // Find all projects that have this category and belong to the organization
+        const projects = await this.projectRepository
+            .createQueryBuilder('project')
+            .innerJoin('project.categories', 'category', 'category.id = :categoryId', { categoryId })
+            .where('project.organizationId = :organizationId', { organizationId })
+            .select(['project.id'])
+            .getMany();
+
+        const projectIds = projects.map(p => p.id);
+
+        if (projectIds.length === 0) {
+            return [[], 0];
+        }
+
+        const where: any = { projectId: In(projectIds) };
+
+        if (status) {
+            where.publishStatus = status as PublishStatus;
+        }
+
+        return await this.contentRepository.findAndCount({
+            where,
+            order: { createdAt: 'DESC' },
+            skip,
+            take,
+        });
+    }
+
+    /**
+     * Search and filter contents by organization (for internal use with advanced filters)
+     */
+    async searchContentsByOrganization(
+        organizationId: string,
+        options: {
+            projectId?: string;
+            categoryId?: string;
+            status?: string;
+            search?: string;
+            skip?: number;
+            take?: number;
+        } = {},
+    ): Promise<{ contents: GeneratedContent[]; total: number; projects: Project[] }> {
+        const { projectId, categoryId, status, search, skip = 0, take = 20 } = options;
+
+        // Get all projects for the organization (with categories for reference)
+        let projectsQuery = this.projectRepository
+            .createQueryBuilder('project')
+            .leftJoinAndSelect('project.categories', 'categories')
+            .where('project.organizationId = :organizationId', { organizationId });
+
+        // If category filter is applied, only get projects with that category
+        if (categoryId) {
+            projectsQuery = projectsQuery
+                .innerJoin('project.categories', 'filterCategory', 'filterCategory.id = :categoryId', { categoryId });
+        }
+
+        const allProjects = await projectsQuery.getMany();
+
+        // If no projects found, return empty
+        if (allProjects.length === 0) {
+            return { contents: [], total: 0, projects: [] };
+        }
+
+        let targetProjectIds = allProjects.map(p => p.id);
+
+        // If specific project filter
+        if (projectId) {
+            if (!targetProjectIds.includes(projectId)) {
+                return { contents: [], total: 0, projects: allProjects };
+            }
+            targetProjectIds = [projectId];
+        }
+
+        // Build contents query
+        const contentsQuery = this.contentRepository
+            .createQueryBuilder('content')
+            .where('content.projectId IN (:...projectIds)', { projectIds: targetProjectIds });
+
+        // Status filter
+        if (status && status !== 'all') {
+            contentsQuery.andWhere('content.publishStatus = :status', { status });
+        }
+
+        // Search filter (title)
+        if (search && search.trim()) {
+            contentsQuery.andWhere('content.title LIKE :search', { search: `%${search.trim()}%` });
+        }
+
+        // Get total count first
+        const total = await contentsQuery.getCount();
+
+        // Get paginated results
+        const contents = await contentsQuery
+            .orderBy('content.createdAt', 'DESC')
+            .skip(skip)
+            .take(take)
+            .getMany();
+
+        return { contents, total, projects: allProjects };
+    }
 }
+
+

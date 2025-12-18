@@ -1,10 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, ManyToOne, ManyToMany, JoinColumn, JoinTable } from 'typeorm';
 import { CsvColumn } from './csv-column.entity';
 import { CsvRow } from './csv-row.entity';
 import { GeneratedContent } from './generated-content.entity';
 import { PublishJob } from './publish-job.entity';
 import { Organization } from './organization.entity';
 import { User } from './user.entity';
+import { Category } from './category.entity';
 
 @Entity('projects')
 export class Project {
@@ -44,9 +45,6 @@ export class Project {
     @Column({ nullable: true })
     thumbnailUrl: string;
 
-    @Column('simple-array', { nullable: true })
-    categories: string[];
-
     @CreateDateColumn()
     createdAt: Date;
 
@@ -72,4 +70,12 @@ export class Project {
     @ManyToOne(() => User, { nullable: true })
     @JoinColumn({ name: 'createdById' })
     createdBy: User;
+
+    @ManyToMany(() => Category, category => category.projects)
+    @JoinTable({
+        name: 'project_categories',
+        joinColumn: { name: 'projectId', referencedColumnName: 'id' },
+        inverseJoinColumn: { name: 'categoryId', referencedColumnName: 'id' },
+    })
+    categories: Category[];
 }

@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Project } from '../entities/project.entity';
 import { OrganizationMember } from '../entities/organization-member.entity';
 import { GeneratedContent } from '../entities/generated-content.entity';
+import { Category } from '../entities/category.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 
@@ -16,16 +17,33 @@ export class ProjectsService {
         private orgMemberRepository: Repository<OrganizationMember>,
         @InjectRepository(GeneratedContent)
         private generatedContentRepository: Repository<GeneratedContent>,
+        @InjectRepository(Category)
+        private categoryRepository: Repository<Category>,
     ) { }
 
     async create(createProjectDto: CreateProjectDto, userId: string): Promise<Project> {
         // Verify user is member of the organization
         await this.checkOrgMembership(createProjectDto.organizationId, userId);
 
+        // Extract categoryIds from DTO
+        const { categoryIds, ...projectData } = createProjectDto;
+
         const project = this.projectRepository.create({
-            ...createProjectDto,
+            ...projectData,
             createdById: userId,
         });
+
+        // If category IDs are provided, fetch and assign them
+        if (categoryIds && categoryIds.length > 0) {
+            const categories = await this.categoryRepository.find({
+                where: {
+                    id: In(categoryIds),
+                    organizationId: createProjectDto.organizationId,
+                },
+            });
+            project.categories = categories;
+        }
+
         return await this.projectRepository.save(project);
     }
 
@@ -45,6 +63,7 @@ export class ProjectsService {
         // with large datasets. Frontend should fetch CSV data separately when needed.
         const query = this.projectRepository
             .createQueryBuilder('project')
+            .leftJoinAndSelect('project.categories', 'categories')
             .where('project.organizationId IN (:...organizationIds)', { organizationIds })
             .loadRelationCountAndMap('project.csvRowCount', 'project.csvRows')
             .loadRelationCountAndMap('project.csvColumnCount', 'project.csvColumns')
@@ -64,7 +83,7 @@ export class ProjectsService {
         // Only load organization and publishJobs for the project detail view
         const project = await this.projectRepository.findOne({
             where: { id },
-            relations: ['csvColumns', 'publishJobs', 'organization'],
+            relations: ['csvColumns', 'publishJobs', 'organization', 'categories'],
         });
 
         if (!project) {
@@ -78,9 +97,10 @@ export class ProjectsService {
     }
 
     async update(id: string, updateProjectDto: UpdateProjectDto, userId: string): Promise<Project> {
-        // Use a lightweight query for update - don't load relations
+        // Load project with categories for update
         const project = await this.projectRepository.findOne({
             where: { id },
+            relations: ['categories'],
         });
 
         if (!project) {
@@ -89,7 +109,24 @@ export class ProjectsService {
 
         await this.checkOrgMembership(project.organizationId, userId);
 
-        Object.assign(project, updateProjectDto);
+        // Handle category update if categoryIds provided
+        const { categoryIds, ...updateData } = updateProjectDto as any;
+
+        if (categoryIds !== undefined) {
+            if (categoryIds.length > 0) {
+                const categories = await this.categoryRepository.find({
+                    where: {
+                        id: In(categoryIds),
+                        organizationId: project.organizationId,
+                    },
+                });
+                project.categories = categories;
+            } else {
+                project.categories = [];
+            }
+        }
+
+        Object.assign(project, updateData);
         return await this.projectRepository.save(project);
     }
 
