@@ -47,7 +47,7 @@ export class PublicController {
     @UseGuards(ApiKeyGuard)
     async getCategoryContents(
         @Param('organizationId') organizationId: string,
-        @Param('categoryId') categoryId: string,
+        @Param('categoryId') categoryIdOrSlug: string,
         @Query('status') status?: string,
         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
         @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number = 50,
@@ -56,6 +56,17 @@ export class PublicController {
         // Verify the API key belongs to this organization
         if (req.organizationId !== organizationId) {
             throw new ForbiddenException('API key does not have access to this organization');
+        }
+
+        let categoryId = categoryIdOrSlug;
+
+        // Check if categoryIdOrSlug is a UUID
+        const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(categoryIdOrSlug);
+
+        if (!isUUID) {
+            // It's a slug, look up the category
+            const category = await this.categoriesService.findBySlug(categoryIdOrSlug, organizationId);
+            categoryId = category.id;
         }
 
         // Limit max items per page
@@ -191,16 +202,25 @@ export class PublicController {
     }
 
     /**
-     * Get a single content item by ID
+     * Get a single content item by ID or Slug
      * Requires API key authentication
      */
-    @Get('contents/:contentId')
+    @Get('contents/:idOrSlug')
     @UseGuards(ApiKeyGuard)
     async getContent(
-        @Param('contentId') contentId: string,
+        @Param('idOrSlug') idOrSlug: string,
         @Request() req?: any,
     ) {
-        return this.contentGeneratorService.findOnePublic(contentId);
+        const organizationId = req.organizationId;
+
+        // Check if idOrSlug is a UUID
+        const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(idOrSlug);
+
+        if (isUUID) {
+            return this.contentGeneratorService.findOnePublic(idOrSlug);
+        } else {
+            return this.contentGeneratorService.findBySlugPublic(idOrSlug, organizationId);
+        }
     }
 }
 

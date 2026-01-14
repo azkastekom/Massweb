@@ -610,6 +610,24 @@ export class ContentGeneratorService {
     }
 
     /**
+     * Find one content by slug and organization for public API
+     */
+    async findBySlugPublic(slug: string, organizationId: string): Promise<GeneratedContent> {
+        const content = await this.contentRepository
+            .createQueryBuilder('content')
+            .innerJoin('content.project', 'project')
+            .where('content.slug = :slug', { slug })
+            .andWhere('project.organizationId = :organizationId', { organizationId })
+            .getOne();
+
+        if (!content) {
+            throw new Error('Content not found');
+        }
+
+        return content;
+    }
+
+    /**
      * Find contents by organization for public API (with pagination and optional project filter)
      */
     async findContentsByOrganization(

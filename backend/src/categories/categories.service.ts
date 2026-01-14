@@ -117,4 +117,19 @@ export class CategoriesService {
             order: { name: 'ASC' },
         });
     }
+
+    /**
+     * Find category by slug and organization
+     */
+    async findBySlug(slug: string, organizationId: string): Promise<Category> {
+        const category = await this.categoryRepository.findOne({
+            where: { slug, organizationId },
+        });
+
+        if (!category) {
+            throw new NotFoundException('Category not found');
+        }
+
+        return category;
+    }
 }
