@@ -121,9 +121,9 @@ export function ProjectApiDocsPage() {
               <div className="space-y-3">
                 <div className="flex items-baseline gap-2">
                   <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-mono rounded">GET</span>
-                  <code className="text-sm">/public/organizations/{"{"}organizationId{"}"}/categories/{"{"}categoryId{"}"}/contents</code>
+                  <code className="text-sm">/public/organizations/{"{"}organizationId{"}"}/categories/{"{"}categoryIdOrSlug{"}"}/contents</code>
                 </div>
-                <p className="text-sm">Get all contents from projects that belong to a specific category.</p>
+                <p className="text-sm">Get all contents from projects that belong to a specific category. You can use either the category ID or slug.</p>
 
                 <div className="space-y-2">
                   <p className="text-sm font-semibold">Query Parameters:</p>
@@ -290,9 +290,9 @@ export function ProjectApiDocsPage() {
               <div className="space-y-3">
                 <div className="flex items-baseline gap-2">
                   <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-mono rounded">GET</span>
-                  <code className="text-sm">/public/contents/{"{"}contentId{"}"}</code>
+                  <code className="text-sm">/public/contents/{"{"}idOrSlug{"}"}</code>
                 </div>
-                <p className="text-sm">Get a single content item by ID.</p>
+                <p className="text-sm">Get a single content item by ID or Slug.</p>
 
                 <div className="space-y-2">
                   <p className="text-sm font-semibold">Response:</p>
