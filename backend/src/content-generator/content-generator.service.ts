@@ -52,7 +52,7 @@ export class ContentGeneratorService {
     }
 
     async generateContentSync(projectId: string): Promise<{ generatedCount: number }> {
-        // Fetch project WITHOUT loading csvRows relation
+        // Fetch project
         const project = await this.projectRepository.findOne({
             where: { id: projectId },
         });
@@ -61,45 +61,25 @@ export class ContentGeneratorService {
             throw new Error('Project not found');
         }
 
+        // Clear existing generated content
         await this.contentRepository.delete({ projectId });
 
-        // Get just the first row to determine columns (don't load all rows)
-        const firstRow = await this.csvRowRepository.findOne({
-            where: { projectId },
-            order: { rowOrder: 'ASC' },
-        });
+        // Compile templates once
+        const contentTemplate = Handlebars.compile(project.template);
+        const titleTemplate = project.titleTemplate ? Handlebars.compile(project.titleTemplate) : null;
+        const metaDescriptionTemplate = project.metaDescriptionTemplate
+            ? Handlebars.compile(project.metaDescriptionTemplate)
+            : null;
+        const tagsTemplate = project.tagsTemplate ? Handlebars.compile(project.tagsTemplate) : null;
 
-        if (!firstRow) {
-            throw new Error('No CSV data found');
-        }
-
-        const allColumnNames = Object.keys(firstRow.rowData);
-
-        let columnsToUse: string[];
-        if (project.titleTemplate) {
-            columnsToUse = this.extractColumnsFromTemplate(project.titleTemplate, allColumnNames);
-        } else {
-            columnsToUse = allColumnNames;
-        }
-
-        // Stream through CSV rows to collect unique values (don't load all at once)
-        const columnValues: Record<string, Set<string>> = {};
-        for (const columnName of columnsToUse) {
-            columnValues[columnName] = new Set<string>();
-        }
-
-        // Also get first value for non-combination columns
-        const firstValuesForOtherColumns: Record<string, string> = {};
-        for (const columnName of allColumnNames) {
-            if (!columnsToUse.includes(columnName)) {
-                firstValuesForOtherColumns[columnName] = firstRow.rowData[columnName] || '';
-            }
-        }
-
-        // Stream through rows in batches to collect unique values
+        // Process rows in batches to avoid memory issues
         const FETCH_BATCH_SIZE = 500;
+        const SAVE_BATCH_SIZE = 100;
         let offset = 0;
         let hasMore = true;
+        let generatedCount = 0;
+        let currentBatch: GeneratedContent[] = [];
+        const usedSlugs = new Set<string>();
 
         while (hasMore) {
             const rows = await this.csvRowRepository.find({
@@ -115,107 +95,55 @@ export class ContentGeneratorService {
             }
 
             for (const row of rows) {
-                for (const columnName of columnsToUse) {
-                    const value = row.rowData[columnName];
-                    if (value && value.trim()) {
-                        columnValues[columnName].add(value.trim());
-                    }
+                const data = row.rowData;
+
+                // Generate content
+                const content = contentTemplate(data);
+                const title = titleTemplate ? titleTemplate(data) : this.generateDefaultTitle(data);
+                const metaDescription = metaDescriptionTemplate ? metaDescriptionTemplate(data) : '';
+                const tags = tagsTemplate ? tagsTemplate(data) : '';
+
+                // Generate slug
+                const slugBase = this.generateSlug(title, '');
+                let slug = slugBase;
+
+                // Simple uniqueness check within this generation run
+                // Note: For a robust system, we might need a database check or retry logic, 
+                // but for mass generation from a single CSV, unique titles are usually expected.
+                if (usedSlugs.has(slug)) {
+                    // Try to make it unique by appending a counter or random string
+                    // For now, let's skip duplicates to avoid errors, or append row order
+                    slug = `${slugBase}-${row.rowOrder}`;
                 }
-                // Get first non-empty value for other columns
-                for (const columnName of allColumnNames) {
-                    if (!columnsToUse.includes(columnName) && !firstValuesForOtherColumns[columnName]) {
-                        if (row.rowData[columnName]) {
-                            firstValuesForOtherColumns[columnName] = row.rowData[columnName];
-                        }
-                    }
+
+                if (usedSlugs.has(slug)) {
+                    continue; // Skip if still duplicate
+                }
+                usedSlugs.add(slug);
+
+                const generatedContent = this.contentRepository.create({
+                    projectId,
+                    content,
+                    title,
+                    metaDescription,
+                    tags,
+                    slug,
+                    thumbnailUrl: project.thumbnailUrl || undefined,
+                    publishStatus: PublishStatus.PENDING,
+                });
+
+                currentBatch.push(generatedContent);
+
+                if (currentBatch.length >= SAVE_BATCH_SIZE) {
+                    await this.contentRepository.save(currentBatch);
+                    generatedCount += currentBatch.length;
+                    currentBatch = [];
                 }
             }
 
             offset += rows.length;
             if (rows.length < FETCH_BATCH_SIZE) {
                 hasMore = false;
-            }
-        }
-
-        // Convert sets to arrays for combination generation
-        const columnValuesArray: Record<string, string[]> = {};
-        for (const columnName of columnsToUse) {
-            columnValuesArray[columnName] = Array.from(columnValues[columnName]);
-        }
-
-        // Safety check: limit combinations to prevent memory exhaustion
-        const MAX_COMBINATIONS = 10000;
-        let estimatedCombinations = 1;
-        for (const columnName of columnsToUse) {
-            estimatedCombinations *= (columnValuesArray[columnName]?.length || 1);
-            if (estimatedCombinations > MAX_COMBINATIONS) {
-                throw new Error(`Too many combinations (${estimatedCombinations}+). Maximum allowed is ${MAX_COMBINATIONS}. Consider reducing unique values in your title template columns or using fewer columns.`);
-            }
-        }
-
-        // Compile templates once
-        const contentTemplate = Handlebars.compile(project.template);
-        const titleTemplate = project.titleTemplate ? Handlebars.compile(project.titleTemplate) : null;
-        const metaDescriptionTemplate = project.metaDescriptionTemplate
-            ? Handlebars.compile(project.metaDescriptionTemplate)
-            : null;
-        const tagsTemplate = project.tagsTemplate ? Handlebars.compile(project.tagsTemplate) : null;
-
-        // Generate combinations iteratively and save in batches
-        const usedSlugs = new Set<string>();
-        let generatedCount = 0;
-        const SAVE_BATCH_SIZE = 100;
-        let currentBatch: GeneratedContent[] = [];
-
-        // Iterative combination generation (no recursion, no intermediate objects)
-        const columnNamesList = columnsToUse;
-        const columnLengths = columnNamesList.map(name => columnValuesArray[name].length);
-        const totalCombinations = columnLengths.reduce((a, b) => a * b, 1);
-
-        for (let i = 0; i < totalCombinations; i++) {
-            // Calculate indices for this combination
-            const data: Record<string, string> = { ...firstValuesForOtherColumns };
-            let temp = i;
-            for (let j = columnNamesList.length - 1; j >= 0; j--) {
-                const columnName = columnNamesList[j];
-                const values = columnValuesArray[columnName];
-                const idx = temp % values.length;
-                data[columnName] = values[idx];
-                temp = Math.floor(temp / values.length);
-            }
-
-            // Generate content
-            const content = contentTemplate(data);
-            const title = titleTemplate ? titleTemplate(data) : this.generateDefaultTitle(data);
-            const metaDescription = metaDescriptionTemplate ? metaDescriptionTemplate(data) : '';
-            const tags = tagsTemplate ? tagsTemplate(data) : '';
-
-            const slugBase = this.generateSlug(title, '');
-            const slug = `${slugBase}`;
-
-            if (usedSlugs.has(slug)) {
-                continue;
-            }
-            usedSlugs.add(slug);
-
-            const generatedContent = this.contentRepository.create({
-                projectId,
-                content,
-                title,
-                metaDescription,
-                tags,
-                slug,
-                thumbnailUrl: project.thumbnailUrl || undefined, // Use project thumbnail
-                publishStatus: PublishStatus.PENDING,
-            });
-
-            currentBatch.push(generatedContent);
-
-            // Save batch when it reaches the limit
-            if (currentBatch.length >= SAVE_BATCH_SIZE) {
-                await this.contentRepository.save(currentBatch);
-                generatedCount += currentBatch.length;
-                currentBatch = []; // Clear batch from memory
             }
         }
 
@@ -226,36 +154,6 @@ export class ContentGeneratorService {
         }
 
         return { generatedCount };
-    }
-
-    private extractColumnsFromTemplate(template: string, availableColumns: string[]): string[] {
-        const extractedColumns: string[] = [];
-
-        // Match both:
-        // 1. {{columnName}} - simple variable names (no spaces)
-        // 2. {{[Column With Spaces]}} - bracket notation for names with spaces
-        const simpleRegex = /\{\{(\w+)\}\}/g;
-        const bracketRegex = /\{\{\[([^\]]+)\]\}\}/g;
-
-        let match;
-
-        // First, extract simple variable names
-        while ((match = simpleRegex.exec(template)) !== null) {
-            const columnName = match[1];
-            if (availableColumns.includes(columnName) && !extractedColumns.includes(columnName)) {
-                extractedColumns.push(columnName);
-            }
-        }
-
-        // Then, extract bracket notation variables (for names with spaces)
-        while ((match = bracketRegex.exec(template)) !== null) {
-            const columnName = match[1];
-            if (availableColumns.includes(columnName) && !extractedColumns.includes(columnName)) {
-                extractedColumns.push(columnName);
-            }
-        }
-
-        return extractedColumns;
     }
 
     async getGeneratedContents(
